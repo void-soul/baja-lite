@@ -1,0 +1,17 @@
+{
+  "name": "baja-lite-cjs",
+  "type": "commonjs",
+  "exports": {
+    ".": {
+      "require": "./index.js"
+    },
+    "./boot.js":"./boot.js",
+    "./boot-remote.js":"./boot-remote.js",
+    "./wx.js": "./wx.js"
+  },
+  "types": "./index.d.ts",
+  "bin": {
+    "baja": "./code.js"
+  },
+  "main": "./index.js"
+}

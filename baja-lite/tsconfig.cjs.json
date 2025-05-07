@@ -1,0 +1,42 @@
+{
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "test/**/*",
+    "*.spec.ts"
+  ],
+  "compilerOptions": {
+    "target": "ES2020",
+    "baseUrl": "./src",
+    "rootDir": "./src",
+    "sourceMap": false,
+    "moduleResolution": "node",
+    "allowJs": false,
+    "strict": true,
+    "declaration": true,
+    "noUnusedLocals": true,
+    "emitDecoratorMetadata": true,
+    "strictNullChecks": true,
+    "composite": true,
+    "experimentalDecorators": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "useUnknownInCatchVariables": false,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitAny": false,
+    "esModuleInterop": true,
+    "removeComments": false,
+    "types": [],
+    "paths": {
+      "@element-plus/*": [
+        "packages/*"
+      ]
+    },
+    "module": "commonjs",
+    "outDir": "./dist-cjs"
+  }
+}

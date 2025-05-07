@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.jeecg.modules.system.mapper.SysUserDataPermissionMapper">
+    <insert id="addDataPermissionByDataId">
+        insert into sys_user_data_permission (eventh_user_id,data_id,user_id,data_type)
+        <foreach collection="dataPermission.userIds" open="(" close=")" item="userId" separator="),(" >
+                UUID_SHORT(),#{dataPermission.dataId},#{userId},#{dataPermission.dataType}
+        </foreach>
+    </insert>
+    <select id="getDataPermissionByDataId" resultType="java.lang.String">
+        select user_id from sys_user_data_permission where #{dataId}
+    </select>
+</mapper>
