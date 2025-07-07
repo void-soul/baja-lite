@@ -48,8 +48,12 @@ const lxMap = {
     geometrycollection: "Object"
 };
 let force = false;
-const basepath = path.join(import.meta.dirname, '..', '..');
-console.log(basepath);
+let basepath = path.join(import.meta.dirname, '..', '..');
+try {
+    fs.statSync(`${basepath}/baja.code.json`);
+} catch (error) {
+    basepath = path.join(import.meta.dirname, '..', '..', '..', '..', '..');
+}
 const config = path.join(basepath, 'baja.code.json');
 const templatePath = path.join(basepath, 'code-template');
 console.log(`
