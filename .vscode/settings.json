@@ -1,0 +1,9 @@
+{
+  // 控制相关文件嵌套展示
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.expand": false,
+  "explorer.fileNesting.patterns": {
+    "package.json": "ci.js,nest-cli.json,.eslintrc.cjs,.eslintignore,eslint.config.js,package-cjs.json,bun.lockb,baja.code.json,.prettierrc,.eslintrc.js,$(capture).env.*,,pnpm-lock.yaml,pnpm-workspace.yaml,LICENSE,.gitattributes,.gitignore,.gitpod.yml,CNAME,README*,.npmrc,.browserslistrc,yarn.lock,verify-commit.mjs,tsconfig.json,nuxt.config.ts,uno.config.ts",
+  },
+  "vue-vine.dataTrack": false
+}

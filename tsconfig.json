@@ -1,0 +1,44 @@
+{
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "test/**/*",
+    "*.spec.ts"
+  ],
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "esnext",
+    "baseUrl": "./src",
+    "rootDir": "./src",
+    "sourceMap": false,
+    "moduleResolution": "node",
+    "allowJs": false,
+    "strict": true,
+    "declaration": true,
+    "noUnusedLocals": true,
+    "emitDecoratorMetadata": true,
+    "strictNullChecks": true,
+    "composite": true,
+    "experimentalDecorators": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "useUnknownInCatchVariables": false,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitAny": false,
+    "esModuleInterop": true,
+    "removeComments": false,
+    "paths": {
+      "@element-plus/*": [
+        "packages/*"
+      ]
+    },
+    "lib": ["ESNext"],
+    "types": ["node"],
+    "skipLibCheck": true,
+    "outDir": "./dist"
+  }
+}

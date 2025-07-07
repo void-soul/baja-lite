@@ -1,0 +1,82 @@
+{
+  "name": "baja-lite",
+  "version": "1.5.14",
+  "description": "some util for self",
+  "homepage": "https://github.com/void-soul/baja-lite",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/void-soul/baja-lite.git"
+  },
+  "license": "MIT",
+  "author": "void-soul",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js"
+    },
+    "./boot.js": "./boot.js",
+    "./boot-remote.js": "./boot-remote.js",
+    "./wx.js": "./wx.js"
+  },
+  "types": "./index.d.ts",
+  "bin": {
+    "baja": "./code.js"
+  },
+  "scripts": {
+    "dist": "node ./ci.js",
+    "mysql": "bun --inspect ./src/test-mysql.ts",
+    "mysql2": "node inspect ./dist/cjs/test-mysql.js",
+    "postgres": "bun --inspect ./src/test-postgresql.ts",
+    "postgres2": "node inspect ./dist/cjs/test-postgresql.js",
+    "sqlite": "node inspect ./dist/cjs/test-sqlite.js",
+    "test": "bun --inspect ./src/test.ts",
+    "test2": "node inspect ./dist/cjs/tes.js",
+    "xml": "bun --inspect ./src/test-xml.ts"
+  },
+  "dependencies": {
+    "@msgpack/msgpack": "3.1.2",
+    "@types/request-promise": "4.1.51",
+    "axios": "1.10.0",
+    "baja-lite-field": "1.4.13",
+    "decimal.js": "10.6.0",
+    "html-parse-stringify": "3.0.1",
+    "iterare": "1.2.1",
+    "lodash.get": "4.4.2",
+    "mustache": "4.2.0",
+    "pino": "9.7.0",
+    "pino-pretty": "13.0.0",
+    "reflect-metadata": "0.2.2",
+    "request": "2.88.2",
+    "request-promise": "4.2.6",
+    "sql-formatter": "15.6.6",
+    "sqlstring": "2.3.3",
+    "tslib": "2.8.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
+    "@types/lodash.get": "4.4.9",
+    "@types/mustache": "4.2.6",
+    "@types/node": "24.0.10",
+    "@types/shelljs": "0.8.17",
+    "@types/sqlstring": "2.3.2",
+    "@typescript-eslint/eslint-plugin": "8.35.1",
+    "@typescript-eslint/parser": "8.35.1",
+    "better-sqlite3": "12.2.0",
+    "ioredis": "5.6.1",
+    "mongodb": "6.17.0",
+    "mysql2": "3.14.1",
+    "pg": "8.16.3",
+    "pg-pool": "3.10.1",
+    "redlock": "5.0.0-beta.2",
+    "shelljs": "0.10.0",
+    "typescript": "5.8.3"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "models": "./index.js"
+}
