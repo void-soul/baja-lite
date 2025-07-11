@@ -24,10 +24,10 @@ cp('./LICENSE', './dist-cjs/LICENSE');
 
 
 console.log('build over');
-cp('-R', './dist/*', '../fast-start/node_modules/baja-lite');
-console.log('fast-start over');
-cp('-R', './dist/*', '../attack-service/node_modules/baja-lite');
-console.log('attack-service over');
-cp('-R', './dist/*', '../attack-front/node_modules/baja-lite');
-console.log('attack-front over');
-console.log('cp over');
+// cp('-R', './dist/*', '../fast-start/node_modules/baja-lite');
+// console.log('fast-start over');
+// cp('-R', './dist/*', '../attack-service/node_modules/baja-lite');
+// console.log('attack-service over');
+// cp('-R', './dist/*', '../attack-front/node_modules/baja-lite');
+// console.log('attack-front over');
+// console.log('cp over');
