@@ -85,7 +85,8 @@ console.log(`
         "logicDeleteK"?: "逻辑删除字段名",
         "logicDeleteV"?: "逻辑删除值",如果是字符串需要这样 logicDeleteV: "'0'"
         "NotlogicDeleteV"?: "未逻辑删除值",如果是字符串需要这样 NotlogicDeleteV: "'0'",
-        "skipColumns"?: ["跳过的列名1", "跳过的列名2"]
+        "skipColumns"?: ["跳过的列名1", "跳过的列名2"],
+        "custom"?: (列名:string) => string; 该属性支持为每个数据库列自定义一个名称，例如 字段名为 ci_name 可通过custom改造为 Ci Name
     }
     command是生成命令，这里声明命令同时定义文件生成路径:可用下面的变量替换.同时必须有同名模板.
     路径是相对于项目根目录的
@@ -97,7 +98,7 @@ console.log(`
     **********************-----------
     模板文件
     请在项目根目录的code-template添加模板文件， 按照mustache(标签定义成了[ '<%', '%>' ])进行格式化,支持使用的变量：
-************* 以下假设表名为event_main_info,列名为sku_id，sku_name
+    ************* 以下假设表名为event_main_info,列名为sku_id，sku_name
     title						// 字符串,表的注释
 	
     tableName					// 字符串,event_main_info
@@ -108,7 +109,7 @@ console.log(`
     splitName					// 字符串,event/main/info
     SplitName					// 字符串,event/mainInfo
 	
-    columns						// 数组, 元素格式为{comment:注释,name: sku_id,Name: skuId,NAME: SkuId,Field:表示字段的注解,JSField_name, JSFieldName 分别表示JS的注解,Type:表示JS类型}
+    columns						// 数组, 元素格式为{comment:注释,name: sku_id,Name: skuId,NAME: SkuId,Field:表示字段的注解,JSField_name、JSFieldName 分别表示JS的注解,Type:表示JS类型,custom:自定义列名}
     column_names				// 数组, 元素是列名字符串，格式是 sku_id,sku_name
     ColumnNames					// 数组, 元素是列名字符串，格式是 skuId,skuName
     column_names_join 			// 字符串,列名join的字符串，格式是 "sku_id,sku_name"
@@ -140,12 +141,12 @@ console.log(`
     modelPath					// 模块名称实际就影响访问路径，所以这里会直接拼好controller的模块访问路径，如果模块为空，则该属性就是空字符串,否则是 /模块名称/
 	
     logicDelete					// 逻辑删除的查询条件，可以附加在sql条件的末尾，可能是空的
-    -----
-    命令 table1,table2,table3:模块名称
+    ---------------------------------------------------------------------------------------------------------------
+    .命令 table1,table2,table3:模块名称
     table=. 表示扫描全库表
     :模块名称 可以省略
     -----
-    force: 切换是否覆盖
+    .force: 切换是否覆盖
 `);
 
 try {
@@ -166,6 +167,7 @@ try {
         NotlogicDeleteV: number;
         tables: string;
         skipColumns: string[];
+        custom?: (c: string) => string;
     };
     configData.skipColumns ??= [];
     configData.command ??= {};
@@ -270,6 +272,9 @@ try {
             r.Field = `@Field({${fields.join(',')}})`;
             r.JSField_name = `{${fields.join(',')}, P: '${r.name}'}`;
             r.JSFieldName = `{${fields.join(',')}, P: '${r.Name}'}`;
+            if(configData.custom){
+                r.custom = configData.custom(r.name);
+            }
             return r;
         });
         conn.release();

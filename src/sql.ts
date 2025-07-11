@@ -10,7 +10,6 @@ import tslib from 'tslib';
 import { convert, XML } from './convert-xml.js';
 import { Throw } from './error.js';
 import { excuteSplit, ExcuteSplitMode, sleep } from './fn.js';
-import { ArrayList } from './list.js';
 import { add, calc, ten2Any } from './math.js';
 import { C2P, C2P2, P2C } from './object.js';
 import { emptyString } from './string.js';
@@ -157,8 +156,6 @@ export enum TemplateResult {
     NotSureOne,
     /** 返回多条记录 */
     Many,
-    /** 返回多条记录并封装ArrayList */
-    ManyList,
     /** 仅查询记录数量 */
     Count
 }
@@ -173,12 +170,8 @@ export enum SelectResult {
     R_CS_NotSure,
     /** 多行一列 */
     RS_C,
-    /** 多行一列并封装ArrayList */
-    RS_C_List,
     /** 多行多列 */
-    RS_CS,
-    /** 多行多列并封装ArrayList */
-    RS_CS_List
+    RS_CS
 }
 export enum ColumnMode {
     NONE, HUMP
@@ -537,7 +530,7 @@ export interface GlobalSqlOption extends GlobalSqlOptionForWeb {
 }
 
 export interface PageQuery<L> {
-    sum?: Record<string, string|number>;
+    sum?: Record<string, string | number>;
     total?: number;
     size?: number;
     records?: L[];
@@ -2902,7 +2895,7 @@ export class SqlService<T extends object> {
                         let result = 0n;
                         for (const { sql, params } of sqls) {
                             const dd = await option!.conn!.execute(SyncMode.Async, sql, params);
-                            if (dd.insertId) { result += dd.insertId; }
+                            if (dd.insertId) { result += BigInt(dd.insertId); }
                         }
                         return result;
                     },
@@ -3049,10 +3042,10 @@ export class SqlService<T extends object> {
         ```
     9.  `dao`: 永远不需要传入该值
     */
-    delete(option: MethodOption & { sync?: SyncMode.Async; id?: string | number | Array<string | number>; where?: Partial<T> | Array<Partial<T>>; mode?: DeleteMode; forceDelete?: boolean; whereSql?: string; whereParams?: Record<string, any>;}): Promise<number>;
+    delete(option: MethodOption & { sync?: SyncMode.Async; id?: string | number | Array<string | number>; where?: Partial<T> | Array<Partial<T>>; mode?: DeleteMode; forceDelete?: boolean; whereSql?: string; whereParams?: Record<string, any>; }): Promise<number>;
     delete(option: MethodOption & { sync: SyncMode.Sync; id?: string | number | Array<string | number>; where?: Partial<T> | Array<Partial<T>>; mode?: DeleteMode; forceDelete?: boolean; whereSql?: string; whereParams?: Record<string, any>; }): number;
     @P<T>()
-    delete(option: MethodOption & {sync?: SyncMode,id?: string | number | Array<string | number>;where?: Partial<T> | Array<Partial<T>>;mode?: DeleteMode;forceDelete?: boolean;whereSql?: string; whereParams?: Record<string, any>;}): Promise<number> | number {
+    delete(option: MethodOption & { sync?: SyncMode, id?: string | number | Array<string | number>; where?: Partial<T> | Array<Partial<T>>; mode?: DeleteMode; forceDelete?: boolean; whereSql?: string; whereParams?: Record<string, any>; }): Promise<number> | number {
         Throw.if(!!this[_ids] && this[_ids].length > 1 && !option.where && !option.whereSql, 'muit id must set where!');
         Throw.if((!this[_ids] || this[_ids].length === 0) && !option.where && !option.whereSql, 'if not set id on class, must set where!');
         Throw.if(!option.id && !option.where && !option.whereSql, 'not found id or where!');
@@ -3072,15 +3065,15 @@ export class SqlService<T extends object> {
 
         const wheres = option.where instanceof Array ? option.where : [option.where!];
         if (wheres.length === 0 && (!option.whereSql || !option.whereParams)) { return 0; }
-        if(option.whereSql && option.whereParams){
+        if (option.whereSql && option.whereParams) {
             option.mode = DeleteMode.Common;
         }
 
         const sqls: { sql: string; params?: any[] }[] = [];
         if (option.mode === DeleteMode.Common) {
-            let params:any[]|undefined;
-            let whereSql:string|undefined;
-            if(option.whereSql && option.whereParams){
+            let params: any[] | undefined;
+            let whereSql: string | undefined;
+            if (option.whereSql && option.whereParams) {
                 const gen = this._generSql(option.dbType!, option.whereSql, option.whereParams);
                 whereSql = gen.sql;
                 params = gen.params;
@@ -3191,9 +3184,6 @@ export class SqlService<T extends object> {
             case TemplateResult.Count: {
                 return result[0].ct;
             }
-            case TemplateResult.ManyList: {
-                return new ArrayList(result[0]);
-            }
         }
     }
     /**
@@ -3227,10 +3217,8 @@ export class SqlService<T extends object> {
     template<L = T>(option: MethodOption & { sync?: SyncMode.Async; templateResult: TemplateResult.NotSureOne; id?: string | number | Array<string | number>; where?: Partial<L> | Array<Partial<L>>; skipUndefined?: boolean; skipNull?: boolean; skipEmptyString?: boolean; mode?: SelectMode; error?: string; columns?: (keyof L)[]; }): Promise<L | null>;
     template<L = T>(option: MethodOption & { sync: SyncMode.Sync; templateResult: TemplateResult.Many; id?: string | number | Array<string | number>; where?: Partial<L> | Array<Partial<L>>; skipUndefined?: boolean; skipNull?: boolean; skipEmptyString?: boolean; mode?: SelectMode; error?: string; columns?: (keyof L)[]; }): L[];
     template<L = T>(option: MethodOption & { sync?: SyncMode.Async; templateResult: TemplateResult.Many; id?: string | number | Array<string | number>; where?: Partial<L> | Array<Partial<L>>; skipUndefined?: boolean; skipNull?: boolean; skipEmptyString?: boolean; mode?: SelectMode; error?: string; columns?: (keyof L)[]; }): Promise<L[]>;
-    template<L = T>(option: MethodOption & { sync: SyncMode.Sync; templateResult: TemplateResult.ManyList; id?: string | number | Array<string | number>; where?: Partial<L> | Array<Partial<L>>; skipUndefined?: boolean; skipNull?: boolean; skipEmptyString?: boolean; mode?: SelectMode; error?: string; columns?: (keyof L)[]; }): ArrayList<L>;
-    template<L = T>(option: MethodOption & { sync?: SyncMode.Async; templateResult: TemplateResult.ManyList; id?: string | number | Array<string | number>; where?: Partial<L> | Array<Partial<L>>; skipUndefined?: boolean; skipNull?: boolean; skipEmptyString?: boolean; mode?: SelectMode; error?: string; columns?: (keyof L)[]; }): Promise<ArrayList<L>>;
     @P<T>()
-    template<L = T>(option: MethodOption & { sync?: SyncMode; templateResult?: TemplateResult; id?: string | number | Array<string | number>; where?: Partial<L> | Array<Partial<L>>; skipUndefined?: boolean; skipNull?: boolean; skipEmptyString?: boolean; mode?: SelectMode; error?: string; columns?: (keyof L)[]; }): number | L | null | L[] | ArrayList<L> | Promise<number | L | null | L[] | ArrayList<L>> {
+    template<L = T>(option: MethodOption & { sync?: SyncMode; templateResult?: TemplateResult; id?: string | number | Array<string | number>; where?: Partial<L> | Array<Partial<L>>; skipUndefined?: boolean; skipNull?: boolean; skipEmptyString?: boolean; mode?: SelectMode; error?: string; columns?: (keyof L)[]; }): number | L | null | L[] | Promise<number | L | null | L[]> {
         Throw.if(!!this[_ids] && this[_ids].length > 1 && !option.where, `muit id must set where!(${option.tableName})`);
         Throw.if((!this[_ids] || this[_ids].length === 0) && !option.where, `if not set id on class, must set where!(${option.tableName})`);
         Throw.if(!option.id && !option.where, `not found id or where!(${option.tableName})`);
@@ -3394,37 +3382,6 @@ export class SqlService<T extends object> {
                     }
                 }
             }
-            case SelectResult.RS_C_List: {
-                try {
-                    if (dataConvert) {
-                        const key = Object.keys(result[0])[0];
-                        if (key && dataConvert[key] && globalThis[_DataConvert][dataConvert[key]]) {
-                            return new ArrayList(result.map((r: any) => globalThis[_DataConvert][dataConvert[key]](Object.values(r)[0])));
-                        }
-                    }
-                    return new ArrayList<L>(result.map((r: any) => Object.values(r)[0] as L));
-                } catch (error) {
-                    return new ArrayList<L>();
-                }
-            }
-            case SelectResult.RS_CS_List: {
-                if (mapper) {
-                    return new ArrayList(iterate(result).map((data) => flatData({
-                        data,
-                        mapper,
-                        mapperIfUndefined
-                    })).toArray());
-                } else {
-                    hump = hump === true || (hump === undefined && globalThis[_Hump] === true);
-                    const __dataConvert = dataConvert ? Object.fromEntries(Object.entries(dataConvert).map(([k, v]) => [k, globalThis[_DataConvert][v]])) : undefined;
-                    if (hump || __dataConvert) {
-                        return new ArrayList(iterate(result).map((r) => C2P2(r as any, hump, __dataConvert)).toArray());
-                    }
-                    else {
-                        return new ArrayList();
-                    }
-                }
-            }
         }
     }
     /**
@@ -3436,9 +3393,7 @@ export class SqlService<T extends object> {
         3. R_CS_Assert,
         4. R_CS_NotSure,
         5. RS_C,
-        6. RS_C_List
         7. RS_CS[默认]
-        8. RS_CS_List
     2. `sql` 或者 `sqlid`
     3. `params`
     4. `defValue`: One_Row_One_Column 时有效
@@ -3459,38 +3414,25 @@ export class SqlService<T extends object> {
      //    或者自定义Mapper,自定义Mapper格式如下:
      [
      {columnName: 'dit_id', mapNames: ['DTID'], def: 0, convert: 转换函数},  // 列名ditid,对应属性DTID,如果没有值，将返回默认值0,其中默认值0是可选的
-     {columnName: 'event_id', mapNames: ['eventMainInfo', 'id'], def: 0,  convert: 转换函数},// 列名event_id对应属性eventMainInfo.id,这种方式将返回嵌套的json对象,其中默认值null是可选的
+     {columnName: 'event_id', mapNames: ['eventMainInfo', 'id'], def: 0,  convert: 转换函数},// 列名event_id对应属性eventMainInfo.id,这种方式将返回嵌套的json对象,其中默认值是可选的
      ]
-     ```
-     #TODO 未完成读取 sqlMapDir
-     #### sqlMapDir 目录定义如下，
-     `test.ts`
-     ```
-     export const dict:SqlMappers = [
-     {columnName: 'dit_id', mapNames: ['DTID'], def: 0, convert: 转换函数},  // 列名ditid,对应属性DTID,如果没有值，将返回默认值0,其中默认值0是可选的
-     {columnName: 'event_id', mapNames: ['eventMainInfo', 'id'], def: 0,  convert: 转换函数},// 列名event_id对应属性eventMainInfo.id,这种方式将返回嵌套的json对象,其中默认值null是可选的
-     ]
-     ```
-     将得到 test.dict 这个map
      12. dataConvert 数据转换器
      ```
      dataConvert: {
          fileName: 'qiniu'
      }
          // 表示列 fileName 按 qiniu的函数格式化
-         // qiniu 在开始时定义
+         // qiniu 在项目初始化时定义
      ```
      */
     select<L = T>(option: MethodOption & { sync?: SyncMode.Async; selectResult?: SelectResult.RS_CS | SelectResult.RS_C; sqlId?: string; sql?: string; params?: Record<string, any>; context?: any; isCount?: boolean; defValue?: L | null; errorMsg?: string; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): Promise<L[]>;
-    select<L = T>(option: MethodOption & { sync?: SyncMode.Async; selectResult: SelectResult.RS_CS_List | SelectResult.RS_C_List; sqlId?: string; sql?: string; params?: Record<string, any>; context?: any; isCount?: boolean; defValue?: L | null; errorMsg?: string; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): Promise<ArrayList<L>>;
     select<L = T>(option: MethodOption & { sync?: SyncMode.Async; selectResult: SelectResult.R_CS_Assert | SelectResult.R_C_Assert; sqlId?: string; sql?: string; params?: Record<string, any>; context?: any; isCount?: boolean; defValue?: L | null; errorMsg?: string; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): Promise<L>;
     select<L = T>(option: MethodOption & { sync?: SyncMode.Async; selectResult: SelectResult.R_CS_NotSure | SelectResult.R_C_NotSure; sqlId?: string; sql?: string; params?: Record<string, any>; context?: any; isCount?: boolean; defValue?: L | null; errorMsg?: string; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): Promise<L | null>;
     select<L = T>(option: MethodOption & { sync: SyncMode.Sync; selectResult?: SelectResult.RS_CS | SelectResult.RS_C; sqlId?: string; sql?: string; params?: Record<string, any>; context?: any; isCount?: boolean; defValue?: L | null; errorMsg?: string; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): L[];
-    select<L = T>(option: MethodOption & { sync: SyncMode.Sync; selectResult: SelectResult.RS_CS_List | SelectResult.RS_C_List; sqlId?: string; sql?: string; params?: Record<string, any>; context?: any; isCount?: boolean; defValue?: L | null; errorMsg?: string; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): ArrayList<L>;
     select<L = T>(option: MethodOption & { sync: SyncMode.Sync; selectResult: SelectResult.R_CS_Assert | SelectResult.R_C_Assert; sqlId?: string; sql?: string; params?: Record<string, any>; context?: any; isCount?: boolean; defValue?: L | null; errorMsg?: string; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): L;
     select<L = T>(option: MethodOption & { sync: SyncMode.Sync; selectResult: SelectResult.R_CS_NotSure | SelectResult.R_C_NotSure; sqlId?: string; sql?: string; params?: Record<string, any>; context?: any; isCount?: boolean; defValue?: L | null; errorMsg?: string; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): L | null;
     @P<T>()
-    select<L = T>(option: MethodOption & { sync?: SyncMode; selectResult?: SelectResult; sqlId?: string; sql?: string; params?: Record<string, any>; context?: any; isCount?: boolean; defValue?: L | null; errorMsg?: string; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): null | L | L[] | ArrayList<L> | Promise<null | L | L[] | ArrayList<L>> {
+    select<L = T>(option: MethodOption & { sync?: SyncMode; selectResult?: SelectResult; sqlId?: string; sql?: string; params?: Record<string, any>; context?: any; isCount?: boolean; defValue?: L | null; errorMsg?: string; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): null | L | L[] | Promise<null | L | L[]> {
         Throw.if(!option.sqlId && !option.sql, 'not found sql!');
         option.selectResult ??= SelectResult.RS_CS;
         option.defValue ??= null;
@@ -3508,6 +3450,73 @@ export class SqlService<T extends object> {
                 try {
                     const result = await option!.conn!.query(SyncMode.Async, sql, params);
                     resolve(this._select<L>(option.selectResult!, result, option.defValue!, option.errorMsg, option.hump, option.mapper, option.mapperIfUndefined, option.dataConvert));
+                } catch (error) {
+                    reject(error);
+                }
+            });
+        }
+    }
+
+
+    /**
+    # 自由查询:一次执行多个SQL语句!
+    0. `sync`: 同步（sqlite）或者异步（mysql、remote），影响返回值类型,默认`异步模式`
+    1. `sql` 或者 `sqlid`
+    2. `params`
+    3. `dbName`: 默认使用service注解的`dbName`,可以在某个方法中覆盖
+    4. `conn`: 仅在开启事务时需要主动传入,传入示例:
+        ```
+            service.transaction(async conn => {
+                service.insert({conn});
+            });
+        ```
+    5.  `dao`: 永远不需要传入该值
+    6. `hump`: 是否将列名改为驼峰写法？默认情况下按照全局配置
+    7. `mapper`: 列名-属性 映射工具，优先级高于hump
+     ```
+     //    该属性支持传入mybatis.xml中定义的resultMap块ID，或者读取sqlMapDir目录下的JSON文件(暂未实现).
+     //    注意：resultMap块的寻找逻辑与sql语句逻辑一致，同样是 文件名.ID
+     //    或者自定义Mapper,自定义Mapper格式如下:
+     [
+        // 数据列名ditid将转换为属性`DTID`,如果没有值，将返回默认值0,其中默认值0是可选的
+        {columnName: 'dit_id', mapNames: ['DTID'], def?: 0, convert: 转换函数},
+        // 数据列名event_id将转换为属性`eventMainInfo.id`,这种方式将返回嵌套的json对象,其中默认值0是可选的
+        {columnName: 'event_id', mapNames: ['eventMainInfo', 'id'], def?: 0,  convert: 转换函数},
+     ]
+     ```
+     8. `dataConvert` 数据转换器
+     ```
+     dataConvert: {
+         fileName: 'qiniu'
+     }
+    // 表示列 fileName 按 qiniu的函数格式化
+    // qiniu 在开始时定义
+     ```
+     */
+    selectBatch<T extends any[] = []>(option: MethodOption & { sync?: SyncMode.Async; selectResult?: SelectResult.RS_CS | SelectResult.RS_C; sqlId?: string; sql?: string; params?: Record<string, any>; context?: any; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): Promise<{ [K in keyof T]: T[K][] }>;
+    selectBatch<T extends any[] = []>(option: MethodOption & { sync?: SyncMode.Async; selectResult: SelectResult.R_CS_Assert | SelectResult.R_C_Assert; sqlId?: string; sql?: string; params?: Record<string, any>; context?: any; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): Promise<{ [K in keyof T]: T[K] }>;
+    selectBatch<T extends any[] = []>(option: MethodOption & { sync?: SyncMode.Async; selectResult: SelectResult.R_CS_NotSure | SelectResult.R_C_NotSure; sqlId?: string; sql?: string; params?: Record<string, any>; context?: any; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): Promise<{ [K in keyof T]: T[K] | null }>;
+    selectBatch<T extends any[] = []>(option: MethodOption & { sync: SyncMode.Sync; selectResult?: SelectResult.RS_CS | SelectResult.RS_C; sqlId?: string; sql?: string; params?: Record<string, any>; context?: any; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): { [K in keyof T]: T[K][] };
+    selectBatch<T extends any[] = []>(option: MethodOption & { sync: SyncMode.Sync; selectResult: SelectResult.R_CS_Assert | SelectResult.R_C_Assert; sqlId?: string; sql?: string; params?: Record<string, any>; context?: any; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): { [K in keyof T]: T[K] };
+    selectBatch<T extends any[] = []>(option: MethodOption & { sync: SyncMode.Sync; selectResult: SelectResult.R_CS_NotSure | SelectResult.R_C_NotSure; sqlId?: string; sql?: string; params?: Record<string, any>; context?: any; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): { [K in keyof T]: T[K] | null };
+    @P<T>()
+    selectBatch<T extends any[] = []>(option: MethodOption & { sync?: SyncMode; selectResult?: SelectResult; sqlId?: string; sql?: string; params?: Record<string, any>; context?: any; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): { [K in keyof T]: T[K][] } | { [K in keyof T]: T[K] } | { [K in keyof T]: T[K] | null } | Promise<{ [K in keyof T]: T[K][] } | { [K in keyof T]: T[K] } | { [K in keyof T]: T[K] | null }> {
+        Throw.if(!option.sqlId && !option.sql, 'not found sql!');
+        option.selectResult ??= SelectResult.RS_CS;
+        if (option.sqlId && globalThis[_resultMap_SQLID][option.sqlId] && !option.mapper) {
+            option.mapper = globalThis[_resultMap_SQLID][option.sqlId];
+        }
+        const _params = Object.assign({}, option.context, option.params);
+        option.sql ??= globalThis[_sqlCache].load(this._matchSqlid(option.sqlId), { ctx: option.context, isCount: false, ..._params });
+        const { sql, params } = this._generSql(option!.dbType!, option.sql, _params);
+        if (option.sync === SyncMode.Sync) {
+            const result = option!.conn!.query<{ [K in keyof T]: T[K][] }>(SyncMode.Sync, sql, params);
+            return result.map(item => this._select<{ [K in keyof T]: T[K][]; }>(option.selectResult!, result, null, undefined, option.hump, option.mapper, option.mapperIfUndefined, option.dataConvert)) as { [K in keyof T]: T[K][] };
+        } else {
+            return new Promise<{ [K in keyof T]: T[K][] }>(async (resolve, reject) => {
+                try {
+                    const result = await option!.conn!.query<{ [K in keyof T]: T[K][] }>(SyncMode.Async, sql, params);
+                    resolve(result.map(item => this._select<{ [K in keyof T]: T[K][]; }>(option.selectResult!, result, null, undefined, option.hump, option.mapper, option.mapperIfUndefined, option.dataConvert)) as { [K in keyof T]: T[K][] });
                 } catch (error) {
                     reject(error);
                 }
@@ -3592,10 +3601,10 @@ export class SqlService<T extends object> {
         return new StreamQuery<L>(this as any, this[_fields]!, this[_columns]!);
     }
 
-    page<L = T>(option: MethodOption & { sync?: SyncMode.Async; sqlId: string; context?: any; params: Record<string, any>; pageSize?: number; pageNumber?: number; limitSelf?: boolean; countSelf?: boolean;sum?:boolean; sumSelf?: boolean; sortName?: string; sortType?: string; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): Promise<PageQuery<L>>;
-    page<L = T>(option: MethodOption & { sync: SyncMode.Sync; sqlId: string; context?: any; params: Record<string, any>; pageSize?: number; pageNumber?: number; limitSelf?: boolean; countSelf?: boolean; sum?:boolean;sumSelf?: boolean; sortName?: string; sortType?: string; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): PageQuery<L>;
+    page<L = T>(option: MethodOption & { sync?: SyncMode.Async; sqlId: string; context?: any; params: Record<string, any>; pageSize?: number; pageNumber?: number; limitSelf?: boolean; countSelf?: boolean; sum?: boolean; sumSelf?: boolean; sortName?: string; sortType?: string; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): Promise<PageQuery<L>>;
+    page<L = T>(option: MethodOption & { sync: SyncMode.Sync; sqlId: string; context?: any; params: Record<string, any>; pageSize?: number; pageNumber?: number; limitSelf?: boolean; countSelf?: boolean; sum?: boolean; sumSelf?: boolean; sortName?: string; sortType?: string; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): PageQuery<L>;
     @P<T>()
-    page<L = T>(option: MethodOption & { sync?: SyncMode; sqlId: string; context?: any; params: Record<string, any>; pageSize?: number; pageNumber?: number; limitSelf?: boolean; countSelf?: boolean;sum?:boolean; sumSelf?: boolean; sortName?: string; sortType?: string; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): PageQuery<L> | Promise<PageQuery<L>> {
+    page<L = T>(option: MethodOption & { sync?: SyncMode; sqlId: string; context?: any; params: Record<string, any>; pageSize?: number; pageNumber?: number; limitSelf?: boolean; countSelf?: boolean; sum?: boolean; sumSelf?: boolean; sortName?: string; sortType?: string; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): PageQuery<L> | Promise<PageQuery<L>> {
         const result: PageQuery<L> = {
             sum: {},
             records: [],
@@ -3620,7 +3629,7 @@ export class SqlService<T extends object> {
         let sql = globalThis[_sqlCache].load(this._matchSqlid(option.sqlId), { ctx: option.context, isCount: false, ...option.params });
         let sqlSum = '';
         let sqlCount = '';
-        if(option.sum){
+        if (option.sum) {
             if (option.sumSelf) {
                 sqlCount = globalThis[_sqlCache].load(this._matchSqlid(`${option.sqlId}_sum`), { ctx: option.context, isCount: false, isSum: true, ...option.params });
             } else {
@@ -3718,7 +3727,7 @@ export class SqlService<T extends object> {
         const columnTitles = new Array<string>();
         const keys = this[_fields] ?
             iterate(Object.entries(this[_fields]))
-                .filter(([K, F]) => (F.id !== true && F.exportable !== false) || (F.id  === true && F.exportable === true))
+                .filter(([K, F]) => (F.id !== true && F.exportable !== false) || (F.id === true && F.exportable === true))
                 .map(([K, F]) => {
                     columnTitles.push(F.comment ?? K);
                     return K;
@@ -3737,7 +3746,7 @@ export class SqlService<T extends object> {
         Throw.if(!this[_fields], 'not set fields!');
         const columnTitles = new Array<string>();
         const keys = iterate(Object.entries(this[_fields]!))
-            .filter(([K, F]) => (F.id !== true && F.exportable !== false) || (F.id  === true && F.exportable  === true))
+            .filter(([K, F]) => (F.id !== true && F.exportable !== false) || (F.id === true && F.exportable === true))
             .map(([K, F]) => {
                 columnTitles.push(F.comment ?? K);
                 return K;
@@ -4146,7 +4155,7 @@ class StreamQuery<T extends object> {
                     const paramKeys: Record<string, string> = {};
                     for (const [key, value] of Object.entries(t)) {
                         const pkey = `p${this._prefix}${this._index++}`;
-                        this._wheres.push(`AND ${this[_fields]![String(key)]?.C2()} = :${pkey} `);
+                        this._wheres.push(`AND t.${this[_fields]![String(key)]?.C2()} = :${pkey} `);
                         this._param[pkey] = value;
                         if (paramName) {
                             paramKeys[key] = pkey;
@@ -4173,18 +4182,6 @@ class StreamQuery<T extends object> {
     /** AND key1 <> key2 */
     @IF_PROCEED<T>()
     notEqWith(key1: keyof T, key2: keyof T) { return this._key(key1, key2, '<>'); }
-    /** AND key REGEXP :regexp */
-    @IF_PROCEED<T>()
-    regexp(key: keyof T, regexp: string, { paramName = '', breakExcuteIfEmpty = true } = {}) { return this._(key, regexp, 'REGEXP', { paramName, skipEmptyString: true, breakExcuteIfEmpty }); }
-    /** AND key NOT REGEXP :regexp */
-    @IF_PROCEED<T>()
-    notRegexp(key: keyof T, regexp: string, { paramName = '', breakExcuteIfEmpty = true } = {}) { return this._(key, regexp, 'REGEXP', { paramName, skipEmptyString: true, not: 'NOT', breakExcuteIfEmpty }); }
-    /** AND (key1 << 8) + key2 = value */
-    @IF_PROCEED<T>()
-    shiftEq(key1: keyof T, key2: keyof T, value: number, { paramName = '', breakExcuteIfEmpty = true } = {}) { return this._shift(key1, key2, value, '=', { paramName, breakExcuteIfEmpty }); }
-    /** AND (key1 << 8) + key2 <> value */
-    @IF_PROCEED<T>()
-    shiftNotEq(key1: keyof T, key2: keyof T, value: number, { paramName = '', breakExcuteIfEmpty = true } = {}) { return this._shift(key1, key2, value, '<>', { paramName, breakExcuteIfEmpty }); }
     /** AND key > :value */
     @IF_PROCEED<T>()
     grate(key: keyof T, value: string | number, { paramName = '', breakExcuteIfEmpty = true } = {}) { return this._(key, value, '>', { paramName, skipEmptyString: true, breakExcuteIfEmpty }); }
@@ -4209,6 +4206,24 @@ class StreamQuery<T extends object> {
     /** AND key1 <= key2 */
     @IF_PROCEED<T>()
     lessEqWith(key1: keyof T, key2: keyof T) { return this._key(key1, key2, '<='); }
+    /** AND key REGEXP :regexp */
+    @IF_PROCEED<T>()
+    regexp(key: keyof T, regexp: string, { paramName = '', breakExcuteIfEmpty = true } = {}) { return this._(key, regexp, 'REGEXP', { paramName, skipEmptyString: true, breakExcuteIfEmpty }); }
+    /** AND key NOT REGEXP :regexp */
+    @IF_PROCEED<T>()
+    notRegexp(key: keyof T, regexp: string, { paramName = '', breakExcuteIfEmpty = true } = {}) { return this._(key, regexp, 'REGEXP', { paramName, skipEmptyString: true, not: 'NOT', breakExcuteIfEmpty }); }
+    /** AND :regexp REGEXP key */
+    @IF_PROCEED<T>()
+    regexp2(key: keyof T, regexp: string, { paramName = '', breakExcuteIfEmpty = true } = {}) { return this._2(key, regexp, 'REGEXP', { paramName, skipEmptyString: true, breakExcuteIfEmpty }); }
+    /** AND :regexp NOT REGEXP key */
+    @IF_PROCEED<T>()
+    notRegexp2(key: keyof T, regexp: string, { paramName = '', breakExcuteIfEmpty = true } = {}) { return this._2(key, regexp, 'REGEXP', { paramName, skipEmptyString: true, not: 'NOT', breakExcuteIfEmpty }); }
+    /** AND (key1 << 8) + key2 = value */
+    @IF_PROCEED<T>()
+    shiftEq(key1: keyof T, key2: keyof T, value: number, { paramName = '', breakExcuteIfEmpty = true } = {}) { return this._shift(key1, key2, value, '=', { paramName, breakExcuteIfEmpty }); }
+    /** AND (key1 << 8) + key2 <> value */
+    @IF_PROCEED<T>()
+    shiftNotEq(key1: keyof T, key2: keyof T, value: number, { paramName = '', breakExcuteIfEmpty = true } = {}) { return this._shift(key1, key2, value, '<>', { paramName, breakExcuteIfEmpty }); }
     /** AND key LIKE CONCAT('%', :value, '%') */
     @IF_PROCEED<T>()
     like(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like(key, value, { paramName, skipEmptyString, left: '%', right: '%', breakExcuteIfEmpty }); }
@@ -4227,40 +4242,88 @@ class StreamQuery<T extends object> {
     /** AND key NOT LIKE CONCAT(:value, '%') */
     @IF_PROCEED<T>()
     notRightLike(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like(key, value, { paramName, skipEmptyString, right: '%', not: 'NOT', breakExcuteIfEmpty }); }
-    /** AND key NOT LIKE :value */
+    /** AND key LIKE :value 注意：不会拼接% */
     @IF_PROCEED<T>()
     PreciseLike(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like(key, value, { paramName, skipEmptyString, breakExcuteIfEmpty }); }
-    /** AND key LIKE :value */
+    /** AND key NOT LIKE :value 注意：不会拼接%*/
     @IF_PROCEED<T>()
     notPreciseLike(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like(key, value, { paramName, skipEmptyString, not: 'NOT', breakExcuteIfEmpty }); }
-    /** AND key GLOB CONCAT('%', :value, '%') */
+    /** AND key GLOB CONCAT('%', :value, '%') 注意：GLOB是大小写敏感like */
     @IF_PROCEED<T>()
     glob(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like(key, value, { paramName, skipEmptyString, left: '%', right: '%', breakExcuteIfEmpty, op: 'GLOB' }); }
-    /** AND key NOT GLOB CONCAT('%', :value, '%') */
+    /** AND key NOT GLOB CONCAT('%', :value, '%') 注意：GLOB是大小写敏感like*/
     @IF_PROCEED<T>()
     notGlob(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like(key, value, { paramName, skipEmptyString, left: '%', right: '%', not: 'NOT', breakExcuteIfEmpty, op: 'GLOB' }); }
-    /** AND key GLOB CONCAT('%', :value) */
+    /** AND key GLOB CONCAT('%', :value) 注意：GLOB是大小写敏感like*/
     @IF_PROCEED<T>()
     leftGlob(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like(key, value, { paramName, skipEmptyString, left: '%', breakExcuteIfEmpty, op: 'GLOB' }); }
-    /** AND key NOT GLOB CONCAT('%', :value) */
+    /** AND key NOT GLOB CONCAT('%', :value) 注意：GLOB是大小写敏感like*/
     @IF_PROCEED<T>()
     notLeftGlob(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like(key, value, { paramName, skipEmptyString, left: '%', not: 'NOT', breakExcuteIfEmpty, op: 'GLOB' }); }
-    /** AND key GLOB CONCAT(:value, '%') */
+    /** AND key GLOB CONCAT(:value, '%') 注意：GLOB是大小写敏感like*/
     @IF_PROCEED<T>()
     rightGlob(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like(key, value, { paramName, skipEmptyString, right: '%', breakExcuteIfEmpty, op: 'GLOB' }); }
-    /** AND key NOT GLOB CONCAT(:value, '%') */
+    /** AND key NOT GLOB CONCAT(:value, '%') 注意：GLOB是大小写敏感like*/
     @IF_PROCEED<T>()
     notRightGlob(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like(key, value, { paramName, skipEmptyString, right: '%', not: 'NOT', breakExcuteIfEmpty, op: 'GLOB' }); }
-    /** AND key GLOB :value */
+    /** AND key GLOB :value 注意：GLOB是大小写敏感like,这里不拼接%*/
     @IF_PROCEED<T>()
-    PreciseGlob(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like(key, value, { paramName, skipEmptyString, breakExcuteIfEmpty, op: 'GLOB' }); }
-    /** AND key NOT GLOB :value */
+    preciseGlob(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like(key, value, { paramName, skipEmptyString, breakExcuteIfEmpty, op: 'GLOB' }); }
+    /** AND key NOT GLOB :value 注意：GLOB是大小写敏感like,这里不拼接%*/
     @IF_PROCEED<T>()
     notPreciseGlob(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like(key, value, { paramName, skipEmptyString, not: 'NOT', breakExcuteIfEmpty, op: 'GLOB' }); }
-    /** AND key IN :value */
+    /** AND :value LIKE CONCAT('%', key, '%') */
+    @IF_PROCEED<T>()
+    like2(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like2(key, value, { paramName, skipEmptyString, left: '%', right: '%', breakExcuteIfEmpty }); }
+    /** AND :value NOT LIKE CONCAT('%', key, '%') */
+    @IF_PROCEED<T>()
+    notLike2(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like2(key, value, { paramName, skipEmptyString, left: '%', right: '%', not: 'NOT', breakExcuteIfEmpty }); }
+    /** AND :value NOT LIKE CONCAT('%', key) */
+    @IF_PROCEED<T>()
+    leftLike2(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like2(key, value, { paramName, skipEmptyString, left: '%', breakExcuteIfEmpty }); }
+    /** AND :value LIKE CONCAT('%', key) */
+    @IF_PROCEED<T>()
+    notLeftLike2(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like2(key, value, { paramName, skipEmptyString, left: '%', not: 'NOT', breakExcuteIfEmpty }); }
+    /** AND :value LIKE CONCAT(key, '%') */
+    @IF_PROCEED<T>()
+    rightLike2(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like2(key, value, { paramName, skipEmptyString, right: '%', breakExcuteIfEmpty }); }
+    /** AND :value NOT LIKE CONCAT(key, '%') */
+    @IF_PROCEED<T>()
+    notRightLike2(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like2(key, value, { paramName, skipEmptyString, right: '%', not: 'NOT', breakExcuteIfEmpty }); }
+    /** AND :value LIKE key 注意：不会拼接% */
+    @IF_PROCEED<T>()
+    PreciseLike2(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like2(key, value, { paramName, skipEmptyString, breakExcuteIfEmpty }); }
+    /** AND :value NOT LIKE key 注意：不会拼接%*/
+    @IF_PROCEED<T>()
+    notPreciseLike2(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like2(key, value, { paramName, skipEmptyString, not: 'NOT', breakExcuteIfEmpty }); }
+    /** AND :value GLOB CONCAT('%', key, '%') 注意：GLOB是大小写敏感like */
+    @IF_PROCEED<T>()
+    glob2(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like2(key, value, { paramName, skipEmptyString, left: '%', right: '%', breakExcuteIfEmpty, op: 'GLOB' }); }
+    /** AND :value NOT GLOB CONCAT('%', key, '%') 注意：GLOB是大小写敏感like*/
+    @IF_PROCEED<T>()
+    notGlob2(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like2(key, value, { paramName, skipEmptyString, left: '%', right: '%', not: 'NOT', breakExcuteIfEmpty, op: 'GLOB' }); }
+    /** AND :value GLOB CONCAT('%', key) 注意：GLOB是大小写敏感like*/
+    @IF_PROCEED<T>()
+    leftGlob2(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like2(key, value, { paramName, skipEmptyString, left: '%', breakExcuteIfEmpty, op: 'GLOB' }); }
+    /** AND :value NOT GLOB CONCAT('%', key) 注意：GLOB是大小写敏感like*/
+    @IF_PROCEED<T>()
+    notLeftGlob2(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like2(key, value, { paramName, skipEmptyString, left: '%', not: 'NOT', breakExcuteIfEmpty, op: 'GLOB' }); }
+    /** AND :value GLOB CONCAT(key, '%') 注意：GLOB是大小写敏感like*/
+    @IF_PROCEED<T>()
+    rightGlob2(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like2(key, value, { paramName, skipEmptyString, right: '%', breakExcuteIfEmpty, op: 'GLOB' }); }
+    /** AND :value NOT GLOB CONCAT(key, '%') 注意：GLOB是大小写敏感like*/
+    @IF_PROCEED<T>()
+    notRightGlob2(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like2(key, value, { paramName, skipEmptyString, right: '%', not: 'NOT', breakExcuteIfEmpty, op: 'GLOB' }); }
+    /** AND :value GLOB key 注意：GLOB是大小写敏感like,这里不拼接%*/
+    @IF_PROCEED<T>()
+    preciseGlob2(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like2(key, value, { paramName, skipEmptyString, breakExcuteIfEmpty, op: 'GLOB' }); }
+    /** AND :value NOT GLOB key 注意：GLOB是大小写敏感like,这里不拼接%*/
+    @IF_PROCEED<T>()
+    notPreciseGlob2(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._like2(key, value, { paramName, skipEmptyString, not: 'NOT', breakExcuteIfEmpty, op: 'GLOB' }); }
+    /** AND key IN (:value) */
     @IF_PROCEED<T>()
     in(key: keyof T, value: Array<string | number>, { paramName = '', breakExcuteIfEmpty = true } = {}) { return this._in(key, value, { paramName, breakExcuteIfEmpty }); }
-    /** AND key NOT IN :value */
+    /** AND key NOT IN (:value) */
     @IF_PROCEED<T>()
     notIn(key: keyof T, value: Array<string | number>, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._in(key, value, { paramName, skipEmptyString, not: 'NOT', breakExcuteIfEmpty }); }
     /** AND :value IN (key1, key2, ...) */
@@ -4275,6 +4338,18 @@ class StreamQuery<T extends object> {
     /** AND key IS NOT NULL */
     @IF_PROCEED<T>()
     isNotNULL(key: keyof T) { return this._null(key, 'NOT'); }
+    /** AND (key IS NULL OR key = '') */
+    @IF_PROCEED<T>()
+    isEmpty(key: keyof T) {
+        this._wheres.push(`AND (t.${this[_fields]![String(key)]?.C2()} IS NULL OR t.${this[_fields]![String(key)]?.C2()} = '')`);
+        return this;
+    }
+    /** AND key IS NOT NULL AND key <> ''*/
+    @IF_PROCEED<T>()
+    isNotEmpty(key: keyof T) {
+        this._wheres.push(`AND t.${this[_fields]![String(key)]?.C2()} IS NOT NULL AND t.${this[_fields]![String(key)]?.C2()} <> ''`);
+        return this;
+    }
     /** AND key BETWEEN :value1 AND :value2 */
     @IF_PROCEED<T>()
     between(key: keyof T, value1: string | number, value2: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._between(key, value1, value2, { paramName, skipEmptyString, breakExcuteIfEmpty }); }
@@ -4287,36 +4362,98 @@ class StreamQuery<T extends object> {
     /** AND NOT POW(2, key) & :value */
     @IF_PROCEED<T>()
     notPow(key: keyof T, value: number, { paramName = '', breakExcuteIfEmpty = true } = {}) { return this._pow(key, value, { paramName, not: 'NOT', breakExcuteIfEmpty }); }
+    /** AND POW(2, :value) & key */
+    @IF_PROCEED<T>()
+    pow2(key: keyof T, value: number, { paramName = '', breakExcuteIfEmpty = true } = {}) { return this._pow2(key, value, { paramName, breakExcuteIfEmpty }); }
+    /** AND NOT POW(2, :value) & key */
+    @IF_PROCEED<T>()
+    notPow2(key: keyof T, value: number, { paramName = '', breakExcuteIfEmpty = true } = {}) { return this._pow2(key, value, { paramName, not: 'NOT', breakExcuteIfEmpty }); }
     /** AND POW(2, key1) & key2 */
     @IF_PROCEED<T>()
     powWith(key: keyof T, values: Array<number | string>, { paramName = '', breakExcuteIfEmpty = true } = {}) { return this._pow(key, add(...values.map(value => Math.pow(2, +value))), { paramName, breakExcuteIfEmpty }); }
     /** AND NOT POW(2, key1) & key2 */
     @IF_PROCEED<T>()
     notPowWith(key: keyof T, values: Array<number | string>, { paramName = '', breakExcuteIfEmpty = true } = {}) { return this._pow(key, add(...values.map(value => Math.pow(2, +value))), { paramName, not: 'NOT', breakExcuteIfEmpty }); }
-    /** AND MATCH(key1, key2, key3) AGAINST (:value) */
+    /** AND MATCH(key1, key2, key3...) AGAINST (:value) */
     @IF_PROCEED<T>()
     match(value: string, keys: (keyof T)[], { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._match(value, keys, { paramName, skipEmptyString, breakExcuteIfEmpty }); }
-    /** AND NOT MATCH(key1, key2, key3) AGAINST (:value) */
+    /** AND NOT MATCH(key1, key2, key3...) AGAINST (:value) */
     @IF_PROCEED<T>()
     notMatch(value: string, keys: (keyof T)[], { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._match(value, keys, { paramName, skipEmptyString, not: 'NOT', breakExcuteIfEmpty }); }
-    /** AND MATCH(key1, key2, key3) AGAINST (:value) IN BOOLEAN MODE*/
+    /** AND MATCH(key1, key2, key3...) AGAINST (:value) IN BOOLEAN MODE*/
     @IF_PROCEED<T>()
     matchBoolean(value: string, keys: (keyof T)[], { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._match(value, keys, { paramName, skipEmptyString, breakExcuteIfEmpty, append: 'IN BOOLEAN MODE' }); }
-    /** AND NOT MATCH(key1, key2, key3) AGAINST (:value) IN BOOLEAN MODE */
+    /** AND NOT MATCH(key1, key2, key3...) AGAINST (:value) IN BOOLEAN MODE */
     @IF_PROCEED<T>()
     notMatchBoolean(value: string, keys: (keyof T)[], { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._match(value, keys, { paramName, skipEmptyString, breakExcuteIfEmpty, not: 'NOT', append: 'IN BOOLEAN MODE' }); }
-    /** AND MATCH(key1, key2, key3) AGAINST (:value) WITH QUERY EXPANSION*/
+    /** AND MATCH(key1, key2, key3...) AGAINST (:value) WITH QUERY EXPANSION*/
     @IF_PROCEED<T>()
     matchQuery(value: string, keys: (keyof T)[], { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._match(value, keys, { paramName, skipEmptyString, breakExcuteIfEmpty, append: 'WITH QUERY EXPANSION' }); }
-    /** AND NOT MATCH(key1, key2, key3) AGAINST (:value) WITH QUERY EXPANSION*/
+    /** AND NOT MATCH(key1, key2, key3...) AGAINST (:value) WITH QUERY EXPANSION*/
     @IF_PROCEED<T>()
     notMatchQuery(value: string, keys: (keyof T)[], { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._match(value, keys, { paramName, skipEmptyString, breakExcuteIfEmpty, not: 'NOT', append: 'WITH QUERY EXPANSION' }); }
-    /** AND NOT LOCATE(key, :value) > 0 */
+    /** AND LOCATE(key, :value) > 0 */
     @IF_PROCEED<T>()
     includes(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._includes(key, value, { paramName, skipEmptyString, breakExcuteIfEmpty }); }
     /** AND NOT LOCATE(key, :value) = 0 */
     @IF_PROCEED<T>()
     notIncludes(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._includes(key, value, { paramName, skipEmptyString, not: 'NOT', breakExcuteIfEmpty }); }
+    /** AND LOCATE(:value, key) > 0 */
+    @IF_PROCEED<T>()
+    includes2(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._includes2(key, value, { paramName, skipEmptyString, breakExcuteIfEmpty }); }
+    /** AND NOT LOCATE(:value, key) = 0 */
+    @IF_PROCEED<T>()
+    notIncludes2(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) { return this._includes2(key, value, { paramName, skipEmptyString, not: 'NOT', breakExcuteIfEmpty }); }
+    /** AND FIND_IN_SET(:value, key) */
+    @IF_PROCEED<T>()
+    findInSet(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) {
+        if (
+            value === null
+            || value === undefined
+            || (emptyString(`${value ?? ''}`) && skipEmptyString)
+        ) {
+            if (breakExcuteIfEmpty) {
+                this.if_exec = false;
+            }
+            return this;
+        }
+        if (paramName !== undefined && this._paramKeys.hasOwnProperty(paramName)) {
+            this._param[this._paramKeys[paramName] as string] = value;
+        } else {
+            const pkey = `p${this._prefix}${this._index++}`;
+            this._wheres.push(`AND FIND_IN_SET(:${pkey}, t.${this[_fields]![String(key)]?.C2()})`);
+            this._param[pkey] = value;
+            if (paramName) {
+                this._paramKeys[paramName] = pkey;
+            }
+        }
+        return this;
+    }
+    /** AND FIND_IN_SET(key, :value) */
+    @IF_PROCEED<T>()
+    findInSet2(key: keyof T, value: string | number, { paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) {
+        if (
+            value === null
+            || value === undefined
+            || (emptyString(`${value ?? ''}`) && skipEmptyString)
+        ) {
+            if (breakExcuteIfEmpty) {
+                this.if_exec = false;
+            }
+            return this;
+        }
+        if (paramName !== undefined && this._paramKeys.hasOwnProperty(paramName)) {
+            this._param[this._paramKeys[paramName] as string] = value;
+        } else {
+            const pkey = `p${this._prefix}${this._index++}`;
+            this._wheres.push(`AND FIND_IN_SET(t.${this[_fields]![String(key)]?.C2()}, :${pkey})`);
+            this._param[pkey] = value;
+            if (paramName) {
+                this._paramKeys[paramName] = pkey;
+            }
+        }
+        return this;
+    }
     @IF_PROCEED<T>()
     and(fn: StreamQuery<T> | ((stream: StreamQuery<T>) => boolean | void)) {
         if (fn instanceof StreamQuery) {
@@ -4339,33 +4476,48 @@ class StreamQuery<T extends object> {
         }
         return this;
     }
+    /**
+     * sql WHERE 查询语句拼接：注意若有JOIN，需要写明别名。本表别名为t.例如:
+     * ```
+     * where('t.name > :name', {name: 1});
+     * where('(t.name > :name OR t.name <> :name)', {name: 1});
+     * ```
+     */
+    @IF_PROCEED<T>()
+    where(sql: string, param?: Record<string, any>) {
+        this._wheres.push(`AND ${sql}`);
+        if (param) {
+            Object.assign(this._param, param);
+        }
+        return this;
+    }
     /** SET key = IFNULL(key, 0) + :value */
     @IF_PROCEED<T>()
     incr(key: keyof T, value = 1) {
         const pkey = `p${this._prefix}${this._index++}`;
         const keyName = this[_fields]![String(key)]?.C2()!;
-        this._updateColumns.push(`${keyName} = IFNULL(${keyName}, 0) + :${pkey}`);
+        this._updateColumns.push(`t.${keyName} = IFNULL(t.${keyName}, 0) + :${pkey}`);
         this._param[pkey] = value;
         return this;
     }
     /** GROUP BY key1, key2, ... */
     @IF_PROCEED<T>()
-    groupBy(...keys: (keyof T)[]) { this._groups.push(...keys.map(key => `${this[_fields]![String(key)]?.C2()}`)); return this; }
+    groupBy(...keys: (keyof T)[]) { this._groups.push(...keys.map(key => `t.${this[_fields]![String(key)]?.C2()}`)); return this; }
     /** GROUP BY key1, key2, ... */
     @IF_PROCEED<T>()
-    groupBy2(...keys: string[]) { this._groups.push(...keys.map(key => `${this[_fields]![String(key)]?.C2()}`)); return this; }
+    groupBy2(...keys: string[]) { this._groups.push(...keys.map(key => `t.${this[_fields]![String(key)]?.C2()}`)); return this; }
     /** ORDER BY key1 ASC, key2 ASC, ... */
     @IF_PROCEED<T>()
-    asc(...keys: (keyof T)[]) { this._orders.push(...keys.map(key => `${this[_fields]![String(key)]?.C2()} ASC`)); return this; }
+    asc(...keys: (keyof T)[]) { this._orders.push(...keys.map(key => `t.${this[_fields]![String(key)]?.C2()} ASC`)); return this; }
     /** ORDER BY key1 ASC, key2 ASC, ... */
     @IF_PROCEED<T>()
-    asc2(...keys: string[]) { this._orders.push(...keys.map(key => `${this[_fields]![String(key)]?.C2()} ASC`)); return this; }
+    asc2(...keys: string[]) { this._orders.push(...keys.map(key => `t.${this[_fields]![String(key)]?.C2()} ASC`)); return this; }
     /** ORDER BY key1 DESC, key2 DESC, ... */
     @IF_PROCEED<T>()
-    desc(...keys: (keyof T)[]) { this._orders.push(...keys.map(key => `${this[_fields]![String(key)]?.C2()} DESC`)); return this; }
+    desc(...keys: (keyof T)[]) { this._orders.push(...keys.map(key => `t.${this[_fields]![String(key)]?.C2()} DESC`)); return this; }
     /** ORDER BY key1 DESC, key2 DESC, ... */
     @IF_PROCEED<T>()
-    desc2(...keys: string[]) { this._orders.push(...keys.map(key => `${this[_fields]![String(key)]?.C2()} ASC`)); return this; }
+    desc2(...keys: string[]) { this._orders.push(...keys.map(key => `t.${this[_fields]![String(key)]?.C2()} ASC`)); return this; }
     /** LIMIT :startRow, :pageSize */
     @IF_PROCEED<T>()
     limit(startRow: number, pageSize: number) { this._startRow = startRow; this._pageSize = pageSize; return this; }
@@ -4376,34 +4528,42 @@ class StreamQuery<T extends object> {
     distinct(on = true) { this._distinct = on; return this; }
     /** COUNT(DISTINCT key) */
     @IF_PROCEED<T>()
-    countDistinct(key: keyof T, countName?: string,) { this._columns.push(`COUNT(DISTINCT ${this[_fields]![String(key)]?.C2()}) ${countName || `${this[_fields]![String(key)]?.C2()}`}`); return this; }
+    countDistinct(key: keyof T, countName?: string,) { this._columns.push(`COUNT(DISTINCT t.${this[_fields]![String(key)]?.C2()}) ${countName || `t.${this[_fields]![String(key)]?.C2()}`}`); return this; }
     @IF_PROCEED<T>()
     count(countName?: string) { this._columns.push(`COUNT(1) ${countName ?? 'ct'}`); return this; }
     @IF_PROCEED<T>()
-    sum(key: keyof T, legName?: string, distinct?: boolean) { this._columns.push(`SUM(${distinct ? 'DISTINCT' : ''} ${this[_fields]![String(key)]?.C2()}) ${legName || `${this[_fields]![String(key)]?.C2()}`}`); return this; }
+    sum(key: keyof T, legName?: string, distinct?: boolean) { this._columns.push(`SUM(${distinct ? 'DISTINCT' : ''} t.${this[_fields]![String(key)]?.C2()}) ${legName || `t.${this[_fields]![String(key)]?.C2()}`}`); return this; }
     @IF_PROCEED<T>()
-    avg(key: keyof T, legName?: string, distinct?: boolean) { this._columns.push(`AVG(${distinct ? 'DISTINCT' : ''} ${this[_fields]![String(key)]?.C2()}) ${legName || `${this[_fields]![String(key)]?.C2()}`}`); return this; }
+    avg(key: keyof T, legName?: string, distinct?: boolean) { this._columns.push(`AVG(${distinct ? 'DISTINCT' : ''} t.${this[_fields]![String(key)]?.C2()}) ${legName || `t.${this[_fields]![String(key)]?.C2()}`}`); return this; }
     @IF_PROCEED<T>()
-    max(key: keyof T, legName?: string, distinct?: boolean) { this._columns.push(`MAX(${distinct ? 'DISTINCT' : ''} ${this[_fields]![String(key)]?.C2()}) ${legName || `${this[_fields]![String(key)]?.C2()}`}`); return this; }
+    max(key: keyof T, legName?: string, distinct?: boolean) { this._columns.push(`MAX(${distinct ? 'DISTINCT' : ''} t.${this[_fields]![String(key)]?.C2()}) ${legName || `t.${this[_fields]![String(key)]?.C2()}`}`); return this; }
     @IF_PROCEED<T>()
-    min(key: keyof T, legName?: string, distinct?: boolean) { this._columns.push(`MIN(${distinct ? 'DISTINCT' : ''} ${this[_fields]![String(key)]?.C2()}) ${legName || `${this[_fields]![String(key)]?.C2()}`}`); return this; }
+    min(key: keyof T, legName?: string, distinct?: boolean) { this._columns.push(`MIN(${distinct ? 'DISTINCT' : ''} t.${this[_fields]![String(key)]?.C2()}) ${legName || `t.${this[_fields]![String(key)]?.C2()}`}`); return this; }
     /** GROUP_CONCAT([DISTINCT] key [ORDER BY :asc ASC] [ORDER BY :asc DESC] [SEPARATOR :separator]) */
     @IF_PROCEED<T>()
     groupConcat(key: keyof T, param?: { distinct?: boolean, separator?: string, asc?: (keyof T)[], desc?: (keyof T)[], groupName?: string }): this {
         this._columns.push(`GROUP_CONCAT(
-            ${param && param.distinct ? 'DISTINCT' : ''} ${this[_fields]![String(key)]?.C2()}
-            ${param && param.asc && param.asc.length > 0 ? `ORDER BY ${param.asc.map(i => `${this[_fields]![String(i)]?.C2()} ASC`)} ` : ''}
-            ${param && param.desc && param.desc.length > 0 ? `${param && param.asc && param.asc.length > 0 ? '' : 'ORDER BY'} ${param.desc.map(i => `${this[_fields]![String(i)]?.C2()} DESC`)} ` : ''}
+            ${param && param.distinct ? 'DISTINCT' : ''} t.${this[_fields]![String(key)]?.C2()}
+            ${param && param.asc && param.asc.length > 0 ? `ORDER BY ${param.asc.map(i => `t.${this[_fields]![String(i)]?.C2()} ASC`)} ` : ''}
+            ${param && param.desc && param.desc.length > 0 ? `${param && param.asc && param.asc.length > 0 ? '' : 'ORDER BY'} ${param.desc.map(i => `t.${this[_fields]![String(i)]?.C2()} DESC`)} ` : ''}
             SEPARATOR '${param && param.separator || ','}'
-            ) ${param && param.groupName || `${this[_fields]![String(key)]?.C2()}`}`);
+            ) ${param && param.groupName || `t.${this[_fields]![String(key)]?.C2()}`}`);
         return this;
     }
     @IF_PROCEED<T>()
-    select(...key: (keyof T)[]) { this._columns.push(...(key.map(k => this[_fields]![String(k)]!.C3()))); return this; }
+    select(...key: (keyof T)[]) { this._columns.push(...(key.map(k => `t.${this[_fields]![String(k)]!.C3()}`))); return this; }
+    /**
+     * sql查询语句拼接：注意若有JOIN，需要写明别名。本表别名为t.例如:
+     * ```
+     * select2('t.name, t.age, ISNULL(t.type, :type)', {type: 1});
+     * select2('MAX(t.age) MAXAge');
+     * ```
+     */
     @IF_PROCEED<T>()
     select2(sql: string, param?: Record<string, any>) { this._columns.push(`${sql}`); Object.assign(this._param, param); return this; }
     @IF_PROCEED<T>()
     update(key: keyof T, value: T[keyof T]) { this._updates ??= {}; this._updates[this[_fields]![String(key)]?.C2()!] = value; return this; }
+    /** update语句拼接：注意若有JOIN，需要写明别名。本表别名为t */
     @IF_PROCEED<T>()
     update2(sql: string, param?: Record<string, any>) { this._updateColumns.push(sql); Object.assign(this._param, param); return this; }
     @IF_PROCEED<T>()
@@ -4419,7 +4579,7 @@ class StreamQuery<T extends object> {
     @IF_PROCEED<T>()
     replace(key: keyof T, valueToFind: T[keyof T], valueToReplace: T[keyof T]) {
         const [pkey1, pkey2] = [`p${this._prefix}${this._index++}`, `p${this._prefix}${this._index++}`];
-        this._updateColumns.push(` ${this[_fields]![String(key)]?.C2()} = REPLACE(${this[_fields]![String(key)]?.C2()}, :${pkey1}, :${pkey2}) `);
+        this._updateColumns.push(` t.${this[_fields]![String(key)]?.C2()} = REPLACE(t.${this[_fields]![String(key)]?.C2()}, :${pkey1}, :${pkey2}) `);
         this._param[pkey1] = valueToFind as any;
         this._param[pkey2] = valueToReplace as any;
         return this;
@@ -4427,23 +4587,21 @@ class StreamQuery<T extends object> {
     // #endregion
 
     excuteSelect<L = T>(option?: MethodOption & { sync?: SyncMode.Async; selectResult?: SelectResult.RS_CS | SelectResult.RS_C; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): Promise<L[]>;
-    excuteSelect<L = T>(option?: MethodOption & { sync?: SyncMode.Async; selectResult?: SelectResult.RS_CS_List | SelectResult.RS_C_List; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): Promise<ArrayList<L>>;
     excuteSelect<L = T>(option: MethodOption & { sync?: SyncMode.Async; selectResult: SelectResult.R_CS_Assert | SelectResult.R_C_Assert; errorMsg?: string; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): Promise<L>;
     excuteSelect<L = T>(option: MethodOption & { sync?: SyncMode.Async; selectResult: SelectResult.R_CS_NotSure | SelectResult.R_C_NotSure; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): Promise<L | null>;
     excuteSelect<L = T>(option: MethodOption & { sync: SyncMode.Sync; selectResult: SelectResult.RS_CS | SelectResult.RS_C; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): L[];
-    excuteSelect<L = T>(option: MethodOption & { sync: SyncMode.Sync; selectResult: SelectResult.RS_CS_List | SelectResult.RS_C_List; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): ArrayList<L>;
     excuteSelect<L = T>(option: MethodOption & { sync: SyncMode.Sync; selectResult: SelectResult.R_CS_Assert | SelectResult.R_C_Assert; errorMsg?: string; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): L;
     excuteSelect<L = T>(option: MethodOption & { sync: SyncMode.Sync; selectResult: SelectResult.R_CS_NotSure | SelectResult.R_C_NotSure; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; dataConvert?: Record<string, string>; }): L | null;
     @IF_EXEC<T>(null)
-    excuteSelect<L = T>(option?: MethodOption & { sync?: SyncMode; selectResult?: SelectResult; errorMsg?: string; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; }): null | L | L[] | ArrayList<L> | Promise<null | L | L[] | ArrayList<L>> {
+    excuteSelect<L = T>(option?: MethodOption & { sync?: SyncMode; selectResult?: SelectResult; errorMsg?: string; hump?: boolean; mapper?: string | SqlMapper; mapperIfUndefined?: MapperIfUndefined; }): null | L | L[] | Promise<null | L | L[]> {
         option ??= {};
         option.sync ??= SyncMode.Async;
         option.selectResult ??= SelectResult.RS_CS;
         const { where, params } = this._where();
         let sql = `
             SELECT
-            ${this._distinct ? 'DISTINCT' : ''} ${this._columns && this._columns.length > 0 ? this._columns.join(',') : this[_columns].map(key => this[_fields]![String(key)]?.C3()).join(',')}
-            FROM ${option.tableName ?? this._service[_tableName]}
+            ${this._distinct ? 'DISTINCT' : ''} ${this._columns && this._columns.length > 0 ? this._columns.join(',') : this[_columns].map(key => `t.${this[_fields]![String(key)]?.C3()}`).join(',')}
+            FROM ${option.tableName ?? this._service[_tableName]} t
             ${where ? ' WHERE ' : ''}
             ${where}
             ${this._groups.length > 0 ? `GROUP BY ${this._groups.join(',')} ` : ''}
@@ -4458,8 +4616,6 @@ class StreamQuery<T extends object> {
             switch (option.selectResult) {
                 case SelectResult.RS_CS: return this._service.select<L>({ ...option, sync: SyncMode.Async, selectResult: SelectResult.RS_CS, sql, params });
                 case SelectResult.RS_C: return this._service.select<L>({ ...option, sync: SyncMode.Async, selectResult: SelectResult.RS_C, sql, params });
-                case SelectResult.RS_CS_List: return this._service.select<L>({ ...option, sync: SyncMode.Async, selectResult: SelectResult.RS_CS_List, sql, params });
-                case SelectResult.RS_C_List: return this._service.select<L>({ ...option, sync: SyncMode.Async, selectResult: SelectResult.RS_C_List, sql, params });
                 case SelectResult.R_CS_Assert: return this._service.select<L>({ ...option, sync: SyncMode.Async, selectResult: SelectResult.R_CS_Assert, sql, params });
                 case SelectResult.R_C_Assert: return this._service.select<L>({ ...option, sync: SyncMode.Async, selectResult: SelectResult.R_C_Assert, sql, params });
                 case SelectResult.R_CS_NotSure: return this._service.select<L>({ ...option, sync: SyncMode.Async, selectResult: SelectResult.R_CS_NotSure, sql, params });
@@ -4469,8 +4625,6 @@ class StreamQuery<T extends object> {
             switch (option.selectResult) {
                 case SelectResult.RS_CS: return this._service.select<L>({ ...option, sync: SyncMode.Sync, selectResult: SelectResult.RS_CS, sql, params });
                 case SelectResult.RS_C: return this._service.select<L>({ ...option, sync: SyncMode.Sync, selectResult: SelectResult.RS_C, sql, params });
-                case SelectResult.RS_CS_List: return this._service.select<L>({ ...option, sync: SyncMode.Sync, selectResult: SelectResult.RS_CS_List, sql, params });
-                case SelectResult.RS_C_List: return this._service.select<L>({ ...option, sync: SyncMode.Sync, selectResult: SelectResult.RS_C_List, sql, params });
                 case SelectResult.R_CS_Assert: return this._service.select<L>({ ...option, sync: SyncMode.Sync, selectResult: SelectResult.R_CS_Assert, sql, params });
                 case SelectResult.R_C_Assert: return this._service.select<L>({ ...option, sync: SyncMode.Sync, selectResult: SelectResult.R_C_Assert, sql, params });
                 case SelectResult.R_CS_NotSure: return this._service.select<L>({ ...option, sync: SyncMode.Sync, selectResult: SelectResult.R_CS_NotSure, sql, params });
@@ -4490,8 +4644,8 @@ class StreamQuery<T extends object> {
         };
         let sql = `
             SELECT
-            ${this._distinct ? 'DISTINCT' : ''} ${this._columns && this._columns.length > 0 ? this._columns.join(',') : this[_columns].map(key => this[_fields]![String(key)]?.C3()).join(',')}
-            FROM ${option.tableName ?? this._service[_tableName]}
+            ${this._distinct ? 'DISTINCT' : ''} ${this._columns && this._columns.length > 0 ? this._columns.join(',') : this[_columns].map(key => `t.${this[_fields]![String(key)]?.C3()}`).join(',')}
+            FROM ${option.tableName ?? this._service[_tableName]} t
             ${where ? ' WHERE ' : ''}
             ${where}
             ${this._groups.length > 0 ? `GROUP BY ${this._groups.join(',')} ` : ''}
@@ -4504,7 +4658,7 @@ class StreamQuery<T extends object> {
         }
         const sqlCount = `
             SELECT COUNT(1)
-            FROM ${option.tableName ?? this._service[_tableName]}
+            FROM ${option.tableName ?? this._service[_tableName]} t
             ${where ? ' WHERE ' : ''}
             ${where}
             ${this._groups.length > 0 ? `GROUP BY ${this._groups.join(',')} ` : ''}
@@ -4571,12 +4725,12 @@ class StreamQuery<T extends object> {
         if (this._updates) {
             for (const [K, V] of Object.entries(this._updates)) {
                 const pkey = `p${this._prefix}${this._index++}`;
-                sets.push(` ${K} = :${pkey} `);
+                sets.push(` t.${K} = :${pkey} `);
                 params[pkey] = V;
             }
         }
         if (sets.length > 0) {
-            const sql = `UPDATE ${option.tableName ?? this._service[_tableName]} SET ${sets.join(',')}
+            const sql = `UPDATE ${option.tableName ?? this._service[_tableName]} t SET ${sets.join(',')}
             ${where ? ' WHERE ' : ''}
             ${where}
             `;
@@ -4589,21 +4743,26 @@ class StreamQuery<T extends object> {
             return 0;
         }
     }
-    excuteDelete(option?: MethodOption & { sync?: SyncMode.Async;forceDelete?: boolean; }): Promise<number>;
-    excuteDelete(option: MethodOption & { sync: SyncMode.Sync;forceDelete?: boolean; }): number;
+    excuteDelete(option?: MethodOption & { sync?: SyncMode.Async; forceDelete?: boolean; }): Promise<number>;
+    excuteDelete(option: MethodOption & { sync: SyncMode.Sync; forceDelete?: boolean; }): number;
     @IF_EXEC<T>(0)
-    excuteDelete(option?: MethodOption & { sync?: SyncMode;forceDelete?: boolean; }): number | Promise<number> {
+    excuteDelete(option?: MethodOption & { sync?: SyncMode; forceDelete?: boolean; }): number | Promise<number> {
         option ??= {};
         option.sync ??= SyncMode.Async;
         const { where, params } = this._where();
-        // const sql = `DELETE FROM ${option.tableName ?? this._service[_tableName]}
-        //     ${where ? ' WHERE ' : ''}
-        //     ${where}
-        // `;
+        const sql = `DELETE FROM ${option.tableName ?? this._service[_tableName]} t
+            ${where ? ' WHERE ' : ''}
+            ${where}
+        `;
+        // if (option.sync === SyncMode.Async) {
+        //     return this._service.delete({ ...option, sync: SyncMode.Async, whereSql: where, whereParams: params });
+        // } else {
+        //     return this._service.delete({ ...option, sync: SyncMode.Sync, whereSql: where, whereParams: params });
+        // }
         if (option.sync === SyncMode.Async) {
-            return this._service.delete({ ...option, sync: SyncMode.Async, whereSql: where, whereParams: params });
+            return this._service.excute({ ...option, sync: SyncMode.Async, sql, params });
         } else {
-            return this._service.delete({ ...option, sync: SyncMode.Sync, whereSql: where, whereParams: params });
+            return this._service.excute({ ...option, sync: SyncMode.Sync, sql, params });
         }
     }
     private _where() {
@@ -4647,7 +4806,30 @@ class StreamQuery<T extends object> {
             this._param[this._paramKeys[paramName] as string] = value;
         } else {
             const pkey = `p${this._prefix}${this._index++}`;
-            this._wheres.push(`AND ${this[_fields]![String(key)]?.C2()} ${not} ${op} :${pkey} `);
+            this._wheres.push(`AND t.${this[_fields]![String(key)]?.C2()} ${not} ${op} :${pkey} `);
+            this._param[pkey] = value;
+            if (paramName) {
+                this._paramKeys[paramName] = pkey;
+            }
+        }
+        return this;
+    }
+    private _2(key: keyof T, value: any, op: string, { not = '', paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) {
+        if (
+            value === null
+            || value === undefined
+            || (emptyString(`${value ?? ''}`) && skipEmptyString)
+        ) {
+            if (breakExcuteIfEmpty) {
+                this.if_exec = false;
+            }
+            return this;
+        }
+        if (paramName !== undefined && this._paramKeys.hasOwnProperty(paramName)) {
+            this._param[this._paramKeys[paramName] as string] = value;
+        } else {
+            const pkey = `p${this._prefix}${this._index++}`;
+            this._wheres.push(`AND :${pkey} ${not} ${op} t.${this[_fields]![String(key)]?.C2()}`);
             this._param[pkey] = value;
             if (paramName) {
                 this._paramKeys[paramName] = pkey;
@@ -4670,7 +4852,7 @@ class StreamQuery<T extends object> {
             this._param[this._paramKeys[paramName] as string] = value;
         } else {
             const pkey = `p${this._prefix}${this._index++}`;
-            this._wheres.push(`AND (${keys.map(key => `${this[_fields]![String(key)]?.C2()} ${not} ${op} :${pkey} `).join(' OR ')})`);
+            this._wheres.push(`AND (${keys.map(key => `t.${this[_fields]![String(key)]?.C2()} ${not} ${op} :${pkey} `).join(' OR ')})`);
             this._param[pkey] = value;
             if (paramName) {
                 this._paramKeys[paramName] = pkey;
@@ -4679,11 +4861,11 @@ class StreamQuery<T extends object> {
         return this;
     }
     private _null(key: keyof T, not = ''): this {
-        this._wheres.push(`AND ${this[_fields]![String(key)]?.C2()} IS ${not} NULL`);
+        this._wheres.push(`AND t.${this[_fields]![String(key)]?.C2()} IS ${not} NULL`);
         return this;
     }
     private _key(key1: keyof T, key2: keyof T, op: string, not = '') {
-        this._wheres.push(`AND ${this[_fields]![String(key1)]?.C2()} ${not} ${op} ${this[_fields]![String(key2)]?.C2()} `);
+        this._wheres.push(`AND t.${this[_fields]![String(key1)]?.C2()} ${not} ${op} t.${this[_fields]![String(key2)]?.C2()} `);
         return this;
     }
     private _between(key: keyof T, value1: string | number, value2: string | number, { not = '', paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) {
@@ -4705,7 +4887,7 @@ class StreamQuery<T extends object> {
             this._param[this._paramKeys[paramName]![1]] = value2;
         } else {
             const [pkey1, pkey2] = [`p${this._prefix}${this._index++}`, `p${this._prefix}${this._index++}`];
-            this._wheres.push(`AND ${this[_fields]![String(key)]?.C2()} ${not} BETWEEN :${pkey1} AND :${pkey2}`);
+            this._wheres.push(`AND t.${this[_fields]![String(key)]?.C2()} ${not} BETWEEN :${pkey1} AND :${pkey2}`);
             this._param[pkey1] = value1;
             this._param[pkey2] = value2;
             if (paramName) {
@@ -4723,7 +4905,7 @@ class StreamQuery<T extends object> {
                 this._param[this._paramKeys[paramName] as string] = value;
             } else {
                 const pkey = `p${this._prefix}${this._index++}`;
-                this._wheres.push(`AND ${this[_fields]![String(key)]?.C2()} ${not} IN (:${pkey}) `);
+                this._wheres.push(`AND t.${this[_fields]![String(key)]?.C2()} ${not} IN (:${pkey}) `);
                 this._param[pkey] = value;
                 if (paramName) {
                     this._paramKeys[paramName] = pkey;
@@ -4741,7 +4923,7 @@ class StreamQuery<T extends object> {
                 this._param[this._paramKeys[paramName] as string] = value;
             } else {
                 const pkey = `p${this._prefix}${this._index++}`;
-                this._wheres.push(`AND :${pkey} ${not} IN (${key.map(k => this[_fields]![String(k)]?.C2()).join(',')}) `);
+                this._wheres.push(`AND :${pkey} ${not} IN (${key.map(k => `t.${this[_fields]![String(k)]?.C2()}`).join(',')}) `);
                 this._param[pkey] = value;
                 if (paramName) {
                     this._paramKeys[paramName] = pkey;
@@ -4767,7 +4949,7 @@ class StreamQuery<T extends object> {
             this._param[this._paramKeys[paramName] as string] = value;
         } else {
             const pkey = `p${this._prefix}${this._index++}`;
-            this._wheres.push(`AND (${this[_fields]![String(key1)]?.C2()} << 8) + ${this[_fields]![String(key2)]?.C2()} ${not} ${op} :${pkey} `);
+            this._wheres.push(`AND (t.${this[_fields]![String(key1)]?.C2()} << 8) + t.${this[_fields]![String(key2)]?.C2()} ${not} ${op} :${pkey} `);
             this._param[pkey] = value;
             if (paramName) {
                 this._paramKeys[paramName] = pkey;
@@ -4790,7 +4972,7 @@ class StreamQuery<T extends object> {
             this._param[this._paramKeys[paramName] as string] = value;
         } else {
             const pkey = `p${this._prefix}${this._index++}`;
-            this._wheres.push(`AND ${not} MATCH(${keys.map(key => this[_fields]![String(key)]?.C2()).join(',')}) AGAINST (:${pkey} ${append ?? ''})`);
+            this._wheres.push(`AND ${not} MATCH(${keys.map(key => `t.${this[_fields]![String(key)]?.C2()}`).join(',')}) AGAINST (:${pkey} ${append ?? ''})`);
             this._param[pkey] = value;
             if (paramName) {
                 this._paramKeys[paramName] = pkey;
@@ -4813,7 +4995,30 @@ class StreamQuery<T extends object> {
             this._param[this._paramKeys[paramName] as string] = value;
         } else {
             const pkey = `p${this._prefix}${this._index++}`;
-            this._wheres.push(`AND ${not} POW(2, ${this[_fields]![String(key)]?.C2()}) & :${pkey}`);
+            this._wheres.push(`AND ${not} POW(2, t.${this[_fields]![String(key)]?.C2()}) & :${pkey}`);
+            this._param[pkey] = value;
+            if (paramName) {
+                this._paramKeys[paramName] = pkey;
+            }
+        }
+        return this;
+    }
+    private _pow2(key: keyof T, value: number, { not = '', paramName = '', breakExcuteIfEmpty = true } = {}) {
+        if (
+            value === null
+            || value === undefined
+            || emptyString(`${value ?? ''}`)
+        ) {
+            if (breakExcuteIfEmpty) {
+                this.if_exec = false;
+            }
+            return this;
+        }
+        if (paramName !== undefined && this._paramKeys.hasOwnProperty(paramName)) {
+            this._param[this._paramKeys[paramName] as string] = value;
+        } else {
+            const pkey = `p${this._prefix}${this._index++}`;
+            this._wheres.push(`AND ${not} POW(2, :${pkey}) & t.${this[_fields]![String(key)]?.C2()}`);
             this._param[pkey] = value;
             if (paramName) {
                 this._paramKeys[paramName] = pkey;
@@ -4837,7 +5042,31 @@ class StreamQuery<T extends object> {
             this._param[this._paramKeys[paramName] as string] = value;
         } else {
             const pkey = `p${this._prefix}${this._index++}`;
-            this._wheres.push(`AND ${this[_fields]![String(key)]?.C2()} ${not} ${op} CONCAT('${left}', :${pkey}, '${right}') `);
+            this._wheres.push(`AND t.${this[_fields]![String(key)]?.C2()} ${not} ${op} CONCAT('${left}', :${pkey}, '${right}') `);
+            this._param[pkey] = value;
+            if (paramName) {
+                this._paramKeys[paramName] = pkey;
+            }
+        }
+        return this;
+    }
+    private _like2(key: keyof T, value: any, { not = '', left = '', right = '', paramName = '', op = 'LIKE', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) {
+        if (
+            value === null
+            || value === undefined
+            || (emptyString(`${value ?? ''}`) && skipEmptyString)
+        ) {
+            if (breakExcuteIfEmpty) {
+                this.if_exec = false;
+            }
+            return this;
+        }
+
+        if (paramName !== undefined && this._paramKeys.hasOwnProperty(paramName)) {
+            this._param[this._paramKeys[paramName] as string] = value;
+        } else {
+            const pkey = `p${this._prefix}${this._index++}`;
+            this._wheres.push(`AND :${pkey} ${not} ${op} CONCAT('${left}',t.${this[_fields]![String(key)]?.C2()}, '${right}') `);
             this._param[pkey] = value;
             if (paramName) {
                 this._paramKeys[paramName] = pkey;
@@ -4860,7 +5089,30 @@ class StreamQuery<T extends object> {
             this._param[this._paramKeys[paramName] as string] = value;
         } else {
             const pkey = `p${this._prefix}${this._index++}`;
-            this._wheres.push(`AND LOCATE(${this[_fields]![String(key)]?.C2()}, :${pkey}) ${not ? '=' : '>'}  0`);
+            this._wheres.push(`AND LOCATE(t.${this[_fields]![String(key)]?.C2()}, :${pkey}) ${not ? '=' : '>'}  0`);
+            this._param[pkey] = value;
+            if (paramName) {
+                this._paramKeys[paramName] = pkey;
+            }
+        }
+        return this;
+    }
+    private _includes2(key: keyof T, value: any, { not = '', paramName = '', skipEmptyString = true, breakExcuteIfEmpty = true } = {}) {
+        if (
+            value === null
+            || value === undefined
+            || (emptyString(`${value ?? ''}`) && skipEmptyString)
+        ) {
+            if (breakExcuteIfEmpty) {
+                this.if_exec = false;
+            }
+            return this;
+        }
+        if (paramName !== undefined && this._paramKeys.hasOwnProperty(paramName)) {
+            this._param[this._paramKeys[paramName] as string] = value;
+        } else {
+            const pkey = `p${this._prefix}${this._index++}`;
+            this._wheres.push(`AND LOCATE(:${pkey}, t.${this[_fields]![String(key)]?.C2()}) ${not ? '=' : '>'}  0`);
             this._param[pkey] = value;
             if (paramName) {
                 this._paramKeys[paramName] = pkey;

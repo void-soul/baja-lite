@@ -1,6 +1,6 @@
 {
   "name": "baja-lite",
-  "version": "1.5.15",
+  "version": "1.5.20",
   "description": "some util for self",
   "homepage": "https://github.com/void-soul/baja-lite",
   "repository": {
@@ -57,11 +57,11 @@
     "@types/better-sqlite3": "7.6.13",
     "@types/lodash.get": "4.4.9",
     "@types/mustache": "4.2.6",
-    "@types/node": "24.0.10",
+    "@types/node": "24.0.12",
     "@types/shelljs": "0.8.17",
     "@types/sqlstring": "2.3.2",
-    "@typescript-eslint/eslint-plugin": "8.35.1",
-    "@typescript-eslint/parser": "8.35.1",
+    "@typescript-eslint/eslint-plugin": "8.36.0",
+    "@typescript-eslint/parser": "8.36.0",
     "better-sqlite3": "12.2.0",
     "ioredis": "5.6.1",
     "mongodb": "6.17.0",
