@@ -7,7 +7,7 @@ const { rm, exec, cp } = pkg;
 
 rm('-rf', './dist/');
 rm('-rf', './tsconfig.tsbuildinfo');
-exec('yarn tsc');
+exec('yarn tsc --module esnext');
 rm('-rf', './tsconfig.tsbuildinfo');
 cp('./package.json', './dist/package.json');
 cp('./README.md', './dist/README.md');

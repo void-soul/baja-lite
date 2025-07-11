@@ -4528,17 +4528,17 @@ class StreamQuery<T extends object> {
     distinct(on = true) { this._distinct = on; return this; }
     /** COUNT(DISTINCT key) */
     @IF_PROCEED<T>()
-    countDistinct(key: keyof T, countName?: string,) { this._columns.push(`COUNT(DISTINCT t.${this[_fields]![String(key)]?.C2()}) ${countName || `t.${this[_fields]![String(key)]?.C2()}`}`); return this; }
+    countDistinct(key: keyof T, countName?: string,) { this._columns.push(`COUNT(DISTINCT t.${this[_fields]![String(key)]?.C2()}) ${countName || this[_fields]![String(key)]?.C2()}`); return this; }
     @IF_PROCEED<T>()
     count(countName?: string) { this._columns.push(`COUNT(1) ${countName ?? 'ct'}`); return this; }
     @IF_PROCEED<T>()
-    sum(key: keyof T, legName?: string, distinct?: boolean) { this._columns.push(`SUM(${distinct ? 'DISTINCT' : ''} t.${this[_fields]![String(key)]?.C2()}) ${legName || `t.${this[_fields]![String(key)]?.C2()}`}`); return this; }
+    sum(key: keyof T, legName?: string, distinct?: boolean) { this._columns.push(`SUM(${distinct ? 'DISTINCT' : ''} t.${this[_fields]![String(key)]?.C2()}) ${legName || this[_fields]![String(key)]?.C2()}`); return this; }
     @IF_PROCEED<T>()
-    avg(key: keyof T, legName?: string, distinct?: boolean) { this._columns.push(`AVG(${distinct ? 'DISTINCT' : ''} t.${this[_fields]![String(key)]?.C2()}) ${legName || `t.${this[_fields]![String(key)]?.C2()}`}`); return this; }
+    avg(key: keyof T, legName?: string, distinct?: boolean) { this._columns.push(`AVG(${distinct ? 'DISTINCT' : ''} t.${this[_fields]![String(key)]?.C2()}) ${legName || this[_fields]![String(key)]?.C2()}`); return this; }
     @IF_PROCEED<T>()
-    max(key: keyof T, legName?: string, distinct?: boolean) { this._columns.push(`MAX(${distinct ? 'DISTINCT' : ''} t.${this[_fields]![String(key)]?.C2()}) ${legName || `t.${this[_fields]![String(key)]?.C2()}`}`); return this; }
+    max(key: keyof T, legName?: string, distinct?: boolean) { this._columns.push(`MAX(${distinct ? 'DISTINCT' : ''} t.${this[_fields]![String(key)]?.C2()}) ${legName || this[_fields]![String(key)]?.C2()}`); return this; }
     @IF_PROCEED<T>()
-    min(key: keyof T, legName?: string, distinct?: boolean) { this._columns.push(`MIN(${distinct ? 'DISTINCT' : ''} t.${this[_fields]![String(key)]?.C2()}) ${legName || `t.${this[_fields]![String(key)]?.C2()}`}`); return this; }
+    min(key: keyof T, legName?: string, distinct?: boolean) { this._columns.push(`MIN(${distinct ? 'DISTINCT' : ''} t.${this[_fields]![String(key)]?.C2()}) ${legName || this[_fields]![String(key)]?.C2()}`); return this; }
     /** GROUP_CONCAT([DISTINCT] key [ORDER BY :asc ASC] [ORDER BY :asc DESC] [SEPARATOR :separator]) */
     @IF_PROCEED<T>()
     groupConcat(key: keyof T, param?: { distinct?: boolean, separator?: string, asc?: (keyof T)[], desc?: (keyof T)[], groupName?: string }): this {
@@ -4547,7 +4547,7 @@ class StreamQuery<T extends object> {
             ${param && param.asc && param.asc.length > 0 ? `ORDER BY ${param.asc.map(i => `t.${this[_fields]![String(i)]?.C2()} ASC`)} ` : ''}
             ${param && param.desc && param.desc.length > 0 ? `${param && param.asc && param.asc.length > 0 ? '' : 'ORDER BY'} ${param.desc.map(i => `t.${this[_fields]![String(i)]?.C2()} DESC`)} ` : ''}
             SEPARATOR '${param && param.separator || ','}'
-            ) ${param && param.groupName || `t.${this[_fields]![String(key)]?.C2()}`}`);
+            ) ${param && param.groupName || this[_fields]![String(key)]?.C2()}`);
         return this;
     }
     @IF_PROCEED<T>()
