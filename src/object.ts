@@ -1,3 +1,4 @@
+import { SetEx } from 'baja-lite-field';
 import * as ite from 'iterare';
 const iterate = ite.iterate;
 /**
@@ -255,6 +256,27 @@ export const arraySplit = <T = any>(datas: T[], { everyLength = 0, groupCount = 
  */
 export const assginObject = <T extends Object>(source: T, ...os: T[]) => {
   os.forEach(o => Object.entries(o).forEach(([key, value]) => value !== null && value !== undefined && `${value}`.trim() !== '' && (source[key] = value)));
+}
+/**
+ * 去除数组中重复数据，同时可以通过each函数为每个数据执行某项操作
+ * @param source
+ * @param each 
+ */
+export const distinctArray = <T extends Object>(
+  source: T[],
+  keys: (keyof T)[],
+  each?: (data: T) => void
+): T[] => {
+  const set = new SetEx<T & { ___id: string }>({ key: '___id' });
+  for (const item of source) {
+    const _item = item as T & { ___id: string };
+    _item.___id = keys.map(key => item[key]).join('_');
+    if (each) {
+      each(item);
+    }
+    set.add(_item);
+  }
+  return set.toArray();
 }
 
 const P2CEX = /[A-Z]/g;

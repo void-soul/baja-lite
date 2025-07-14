@@ -1833,12 +1833,17 @@ class Build {
 
     /**
      *
-     * beetween and
-     * etc.
-     * {{#between}} AND t.createtime | ({{createtime}}) {{/between}}
-     * createtime: 1,2
-     * ===
-     * AND t.createtime BETWEEN 1 AND 2
+     * # beetween and
+     * ## etc.
+     * ```
+     * {{#between}} AND t.createtime ({{createtime}}) {{/between}}
+     * // 其中：
+     * createtime = '1,2'
+     * // 或者
+     * createtime = ['1', '2']
+     * // 将生成：
+     * AND t.createtime BETWEEN '1' AND '2'
+     * ```
      * @returns
      * @memberof Build
      */
@@ -1848,8 +1853,12 @@ class Build {
             if (/\(([\w\W]+)\)/.exec(result)) {
                 return render(text).replace(/\(([\w\W]+)\)/, (a, b) => {
                     if (a && b) {
-                        const xx = b.split(',');
-                        return `'${xx[0]}' AND '${xx[1]}'`;
+                        if (typeof b === 'string') {
+                            const xx = b.split(',');
+                            return ` BETWEEN '${xx[0]}' AND '${xx[1]}'`;
+                        } else {
+                            return ` BETWEEN '${b[0]}' AND '${b[1]}'`;
+                        }
                     } else {
                         return '';
                     }
@@ -3511,12 +3520,12 @@ export class SqlService<T extends object> {
         const { sql, params } = this._generSql(option!.dbType!, option.sql, _params);
         if (option.sync === SyncMode.Sync) {
             const result = option!.conn!.query<{ [K in keyof T]: T[K][] }>(SyncMode.Sync, sql, params);
-            return result.map(item => this._select<{ [K in keyof T]: T[K][]; }>(option.selectResult!, result, null, undefined, option.hump, option.mapper, option.mapperIfUndefined, option.dataConvert)) as { [K in keyof T]: T[K][] };
+            return result.map(item => this._select<{ [K in keyof T]: T[K][]; }>(option.selectResult!, item, null, undefined, option.hump, option.mapper, option.mapperIfUndefined, option.dataConvert)) as { [K in keyof T]: T[K][] };
         } else {
             return new Promise<{ [K in keyof T]: T[K][] }>(async (resolve, reject) => {
                 try {
                     const result = await option!.conn!.query<{ [K in keyof T]: T[K][] }>(SyncMode.Async, sql, params);
-                    resolve(result.map(item => this._select<{ [K in keyof T]: T[K][]; }>(option.selectResult!, result, null, undefined, option.hump, option.mapper, option.mapperIfUndefined, option.dataConvert)) as { [K in keyof T]: T[K][] });
+                    resolve(result.map(item => this._select<{ [K in keyof T]: T[K][]; }>(option.selectResult!, item, null, undefined, option.hump, option.mapper, option.mapperIfUndefined, option.dataConvert)) as { [K in keyof T]: T[K][] });
                 } catch (error) {
                     reject(error);
                 }
