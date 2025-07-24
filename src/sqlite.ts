@@ -132,10 +132,30 @@ export abstract class SqliteRemoteClass implements SqliteRemoteInterface {
                 PRIMARY KEY ( ______tableName )
                 );
             `);
-            this.dbList[dbName].function('UUID_SHORT', { deterministic: true }, () => snowflake.generate());
+            this.dbList[dbName].function('UUID_SHORT', { deterministic: false }, () => snowflake.generate());
+            this.dbList[dbName].function('UUID', { deterministic: false }, () => snowflake.generate());
             this.dbList[dbName].function('TIME_TO_SEC', { deterministic: true }, (time: string) => time.split(':').map((v, i) => parseInt(v) * (i > 0 ? 1 : 60)).reduce((a, b) => a + b, 0));
             this.dbList[dbName].function('IF', { deterministic: true }, (condition: any, v1: any, v2: any) => condition ? v1 : v2);
             this.dbList[dbName].function('RIGHT', { deterministic: true }, (src: string, p: number) => src.slice(p * -1));
+            this.dbList[dbName].function('LEFT', { deterministic: true }, (str: string, len: number) => str?.substring(0, len) || null);
+            this.dbList[dbName].function('NOW', { deterministic: false }, () => new Date().toISOString().slice(0, 19).replace('T', ' '));
+            this.dbList[dbName].function('CURDATE', { deterministic: false }, () => new Date().toISOString().split('T')[0]);
+            this.dbList[dbName].function('DATE_FORMAT', { deterministic: true }, (dateStr: string, format: string) => {
+                const date = new Date(dateStr);
+                return format
+                    .replace('%Y', date.getFullYear().toString())
+                    .replace('%m', (date.getMonth() + 1).toString().padStart(2, '0'))
+                    .replace('%d', date.getDate().toString().padStart(2, '0'))
+                    .replace('%H', date.getHours().toString().padStart(2, '0'))
+                    .replace('%i', date.getMinutes().toString().padStart(2, '0'))
+                    .replace('%s', date.getSeconds().toString().padStart(2, '0'));
+            });
+            this.dbList[dbName].function('RAND', { deterministic: false }, () => Math.random());
+            this.dbList[dbName].function('UNIX_TIMESTAMP', { deterministic: false },
+                (dateStr?: string) => dateStr
+                    ? Math.floor(new Date(dateStr).getTime() / 1000)
+                    : Math.floor(Date.now() / 1000)
+            );
         }
     }
     async export(dbName: string, exportPath: string): Promise<void> {
