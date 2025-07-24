@@ -12,7 +12,9 @@ import { Throw } from './error.js';
 import { excuteSplit, ExcuteSplitMode, sleep } from './fn.js';
 import { add, calc, ten2Any } from './math.js';
 import { C2P, C2P2, P2C } from './object.js';
+import { snowflake } from './snowflake.js';
 import { emptyString } from './string.js';
+
 const iterate = ite.iterate;
 (BigInt.prototype as any).toJSON = function () { return this.toString() }
 const BIGINT_EXT_TYPE = 0;
@@ -110,10 +112,14 @@ export enum InsertMode {
     2. 临时表的结构复制正式表
      */
     InsertWithTempTable,
+    /**
+     * 如果不存在则插入
+     * 来源是数据库，根据ID或者指定字段查询
+     */
     InsertIfNotExists,
     /**
     # 插入或者更新
-    1. 判断依据是主键
+    1. 判断依据是主键,来源是从数据库查询
      */
     Replace
 }
@@ -1315,6 +1321,10 @@ export class Sqlite implements Dao {
             PRIMARY KEY ( ______tableName )
             );
         `);
+        this[_daoDB].function('UUID_SHORT', { deterministic: true }, () => snowflake.generate());
+        this[_daoDB].function('TIME_TO_SEC', { deterministic: true }, (time: string) => time.split(':').map((v, i) => parseInt(v) * (i > 0 ? 1 : 60)).reduce((a, b) => a + b, 0));
+        this[_daoDB].function('IF', { deterministic: true }, (condition: any, v1: any, v2: any) => condition ? v1 : v2);
+        this[_daoDB].function('RIGHT', { deterministic: true }, (src: string, p: number) => src.slice(p * -1));
     }
 
     createConnection(sync: SyncMode.Sync): Connection | null;
@@ -4109,6 +4119,7 @@ class StreamQuery<T extends object> {
     private [_fields]: Record<string, AField>;
     private [_columns]: string[];
     constructor(service: SqlService<T>, __fields: Record<string, AField>, __columns: string[]) {
+
         this._prefix = parseInt(`${Math.random() * 1000}`);
         this._service = service;
         this[_fields] = __fields;
@@ -4739,10 +4750,10 @@ class StreamQuery<T extends object> {
             }
         }
         if (sets.length > 0) {
-            const sql = `UPDATE ${option.tableName ?? this._service[_tableName]} t SET ${sets.join(',')}
+            const sql = `UPDATE ${option.tableName ?? this._service[_tableName]} SET ${sets.join(',')}
             ${where ? ' WHERE ' : ''}
             ${where}
-            `;
+            `.replace(/t\./g, '');
             if (option.sync === SyncMode.Async) {
                 return this._service.excute({ ...option, sync: SyncMode.Async, sql, params });
             } else {
@@ -4759,10 +4770,10 @@ class StreamQuery<T extends object> {
         option ??= {};
         option.sync ??= SyncMode.Async;
         const { where, params } = this._where();
-        const sql = `DELETE FROM ${option.tableName ?? this._service[_tableName]} t
+        const sql = `DELETE FROM ${option.tableName ?? this._service[_tableName]}
             ${where ? ' WHERE ' : ''}
             ${where}
-        `;
+        `.replace(/t\./g, '');
         // if (option.sync === SyncMode.Async) {
         //     return this._service.delete({ ...option, sync: SyncMode.Async, whereSql: where, whereParams: params });
         // } else {

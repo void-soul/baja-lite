@@ -1,6 +1,7 @@
-import { SqliteRemoteInterface, extensionCodec, logger } from './sql.js';
+import { decode, encode } from "@msgpack/msgpack";
 import Sqlstring from 'sqlstring';
-import { encode, decode } from "@msgpack/msgpack";
+import { snowflake } from './snowflake.js';
+import { SqliteRemoteInterface, extensionCodec, logger } from './sql.js';
 export abstract class SqliteRemoteClass implements SqliteRemoteInterface {
     private dbList: Record<string, any> = {};
     /** 原始存放路径 */
@@ -131,6 +132,10 @@ export abstract class SqliteRemoteClass implements SqliteRemoteInterface {
                 PRIMARY KEY ( ______tableName )
                 );
             `);
+            this.dbList[dbName].function('UUID_SHORT', { deterministic: true }, () => snowflake.generate());
+            this.dbList[dbName].function('TIME_TO_SEC', { deterministic: true }, (time: string) => time.split(':').map((v, i) => parseInt(v) * (i > 0 ? 1 : 60)).reduce((a, b) => a + b, 0));
+            this.dbList[dbName].function('IF', { deterministic: true }, (condition: any, v1: any, v2: any) => condition ? v1 : v2);
+            this.dbList[dbName].function('RIGHT', { deterministic: true }, (src: string, p: number) => src.slice(p * -1));
         }
     }
     async export(dbName: string, exportPath: string): Promise<void> {
