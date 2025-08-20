@@ -1,4 +1,4 @@
-import LGet from 'lodash.get';
+import { LGet } from 'baja-lite-field';
 export interface XML {
     type: 'tag' | 'text';
     name: string;

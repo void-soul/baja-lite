@@ -134,7 +134,7 @@ export abstract class SqliteRemoteClass implements SqliteRemoteInterface {
             `);
             this.dbList[dbName].function('UUID_SHORT', { deterministic: false }, () => snowflake.generate());
             this.dbList[dbName].function('UUID', { deterministic: false }, () => snowflake.generate());
-            this.dbList[dbName].function('TIME_TO_SEC', { deterministic: true }, (time: string) => time.split(':').map((v, i) => parseInt(v) * (i > 0 ? 1 : 60)).reduce((a, b) => a + b, 0));
+            this.dbList[dbName].function('TIME_TO_SEC', { deterministic: true }, (time: string) => time.split(':').map((v, i) => parseInt(v) * (i===0?360:i===1?60:0)).reduce((a, b) => a + b, 0));
             this.dbList[dbName].function('IF', { deterministic: true }, (condition: any, v1: any, v2: any) => condition ? v1 : v2);
             this.dbList[dbName].function('RIGHT', { deterministic: true }, (src: string, p: number) => src.slice(p * -1));
             this.dbList[dbName].function('LEFT', { deterministic: true }, (str: string, len: number) => str?.substring(0, len) || null);

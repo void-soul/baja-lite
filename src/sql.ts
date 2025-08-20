@@ -1,8 +1,7 @@
 import { decode, DecodeError, encode, ExtensionCodec } from "@msgpack/msgpack";
-import { _columns, _columnsNoId, _def, _deleteState, _fields, _Hump, _ids, _index, _logicIds, _stateFileName, AField, DBType, EnumMap, Field, FieldOption } from 'baja-lite-field';
+import { _columns, _columnsNoId, _def, _deleteState, _fields, _Hump, _ids, _index, _logicIds, _stateFileName, AField, DBType, EnumMap, Field, FieldOption, LGet } from 'baja-lite-field';
 import HTML from 'html-parse-stringify';
 import * as ite from 'iterare';
-import LGet from 'lodash.get';
 import mustache, { PartialsOrLookupFn } from 'mustache';
 import pino from 'pino';
 import { formatDialect, mysql, postgresql, sqlite } from 'sql-formatter';
@@ -1323,7 +1322,7 @@ export class Sqlite implements Dao {
         `);
         this[_daoDB].function('UUID_SHORT', { deterministic: false }, () => snowflake.generate());
         this[_daoDB].function('UUID', { deterministic: false }, () => snowflake.generate());
-        this[_daoDB].function('TIME_TO_SEC', { deterministic: true }, (time: string) => time.split(':').map((v, i) => parseInt(v) * (i > 0 ? 1 : 60)).reduce((a, b) => a + b, 0));
+        this[_daoDB].function('TIME_TO_SEC', { deterministic: true }, (time: string) => time.split(':').map((v, i) => parseInt(v) * (i === 0 ? 360 : i === 1 ? 60 : 0)).reduce((a, b) => a + b, 0));
         this[_daoDB].function('IF', { deterministic: true }, (condition: any, v1: any, v2: any) => condition ? v1 : v2);
         this[_daoDB].function('RIGHT', { deterministic: true }, (src: string, p: number) => src.slice(p * -1));
         this[_daoDB].function('LEFT', { deterministic: true }, (str: string, len: number) => str?.substring(0, len) || null);
@@ -4056,7 +4055,7 @@ export class SqlService<T extends object> {
     }
     private _generSql(dbType: DBType, _sql?: string, _params?: Record<string, any>) {
         const params: any[] = [];
-        const sql = formatDialect(_sql?.replace(/\:(\w+)/g, (txt, key) => {
+        const sql = formatDialect(_sql?.replace(/\:([\w.]+)/g, (txt, key) => {
             let V = LGet(_params, key);
 
             if (V !== undefined) {
