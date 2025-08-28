@@ -1,6 +1,6 @@
 {
   "name": "baja-lite",
-  "version": "1.6.0",
+  "version": "1.6.2",
   "description": "some util for self",
   "homepage": "https://github.com/void-soul/baja-lite",
   "repository": {
@@ -38,7 +38,7 @@
     "@msgpack/msgpack": "3.1.2",
     "@types/request-promise": "4.1.51",
     "axios": "1.11.0",
-    "baja-lite-field": "1.4.18",
+    "baja-lite-field": "1.4.20",
     "decimal.js": "10.6.0",
     "html-parse-stringify": "3.0.1",
     "iterare": "1.2.1",

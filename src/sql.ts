@@ -4611,7 +4611,6 @@ class StreamQuery<T extends object> {
         for (const [key, value] of Object.entries(t)) {
             this._updates[this[_fields]![String(key)]?.C2()!] = value;
         }
-        Object.assign(this._updates, t);
         return this;
     }
     /** SET key = REPLACE(key, :valueToFind,  :valueToReplace) */
