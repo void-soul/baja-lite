@@ -3810,7 +3810,7 @@ export class SqlService<T extends object> {
             if (option?.force) {
                 option!.conn!.execute(SyncMode.Sync, `DROP TABLE IF EXISTS ${tableES};`);
             }
-            const lastVersion = this[_sqlite_version] ?? '0.0.1';
+            const lastVersion = this[_sqlite_version] ?? '1';
             // 检查表
             const tableCheckResult = option!.conn!.pluck<number>(SyncMode.Sync, `SELECT COUNT(1) t FROM sqlite_master WHERE TYPE = 'table' AND name = ?`, [option!.tableName]);
             if (tableCheckResult) {
@@ -3837,7 +3837,6 @@ export class SqlService<T extends object> {
                             option!.conn!.execute(SyncMode.Sync, `CREATE INDEX ${`${index}_${Math.random()}`.replace(/\./, '')} ON ${tableES} ("${this[_fields]![index]?.C2()}");`);
                         }
                     }
-                    option!.conn!.execute(SyncMode.Sync, `INSERT INTO ${tableES} (${columns}) SELECT ${columns} FROM ${rtable};`);
                     option!.conn!.execute(SyncMode.Sync, `INSERT INTO ${tableES} (${columns}) SELECT ${columns} FROM ${rtable};`);
                     option!.conn!.execute(SyncMode.Sync, `DROP TABLE IF EXISTS ${rtable};`);
                     // 更新完毕，保存版本号
@@ -3868,7 +3867,7 @@ export class SqlService<T extends object> {
                     if (option?.force) {
                         await option!.conn!.execute(SyncMode.Async, `DROP TABLE IF EXISTS ${tableES};`);
                     }
-                    const lastVersion = this[_sqlite_version] ?? '0.0.1';
+                    const lastVersion = this[_sqlite_version] ?? '1';
                     // 检查表
                     const tableCheckResult = await option!.conn!.pluck<number>(SyncMode.Async, `SELECT COUNT(1) t FROM sqlite_master WHERE TYPE = 'table' AND name = ?`, [option!.tableName]);
                     if (tableCheckResult) {
@@ -3895,7 +3894,6 @@ export class SqlService<T extends object> {
                                     await option!.conn!.execute(SyncMode.Async, `CREATE INDEX ${`${index}_${Math.random()}`.replace(/\./, '')} ON ${tableES} ("${this[_fields]![index]?.C2()}");`);
                                 }
                             }
-                            await option!.conn!.execute(SyncMode.Async, `INSERT INTO ${tableES} (${columns}) SELECT ${columns} FROM ${rtable};`);
                             await option!.conn!.execute(SyncMode.Async, `INSERT INTO ${tableES} (${columns}) SELECT ${columns} FROM ${rtable};`);
                             await option!.conn!.execute(SyncMode.Async, `DROP TABLE IF EXISTS ${rtable};`);
                             // 更新完毕，保存版本号
