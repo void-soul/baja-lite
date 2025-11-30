@@ -60,6 +60,7 @@ const _daoDB = Symbol('daoDB');
 const _sqliteRemoteName = Symbol('sqliteRemoteName');
 const _SqlOption = Symbol('SqlOption');
 export const _DataConvert = Symbol('DataConvert');
+export const _Context = Symbol('Context');
 const _resultMap = Symbol('resultMap');
 const _resultMap_SQLID = Symbol('resultMap_SQLID');
 export const _enum = Symbol('_enum');
@@ -322,6 +323,8 @@ export interface GlobalSqlOptionForWeb {
      * ```
      */
     dataConvert?: Record<string, (data: any) => any>;
+    /** 公开上下文 */
+    ctx?: any;
 }
 /**
  # 全局行为配置文件
@@ -3477,8 +3480,8 @@ export class SqlService<T extends object> {
         if (option.sqlId && globalThis[_resultMap_SQLID][option.sqlId] && !option.mapper) {
             option.mapper = globalThis[_resultMap_SQLID][option.sqlId];
         }
-        const _params = Object.assign({}, option.context, option.params);
-        option.sql ??= globalThis[_sqlCache].load(this._matchSqlid(option.sqlId), { ctx: option.context, isCount: option.isCount, ..._params });
+        const _params = Object.assign({}, option.params);
+        option.sql ??= globalThis[_sqlCache].load(this._matchSqlid(option.sqlId), { ctx: Object.assign({}, option.context, globalThis[_Context]), isCount: option.isCount, ..._params });
         const { sql, params } = this._generSql(option!.dbType!, option.sql, _params);
         if (option.sync === SyncMode.Sync) {
             const result = option!.conn!.query(SyncMode.Sync, sql, params);
@@ -3544,8 +3547,8 @@ export class SqlService<T extends object> {
         if (option.sqlId && globalThis[_resultMap_SQLID][option.sqlId] && !option.mapper) {
             option.mapper = globalThis[_resultMap_SQLID][option.sqlId];
         }
-        const _params = Object.assign({}, option.context, option.params);
-        option.sql ??= globalThis[_sqlCache].load(this._matchSqlid(option.sqlId), { ctx: option.context, isCount: false, ..._params });
+        const _params = Object.assign({}, option.params);
+        option.sql ??= globalThis[_sqlCache].load(this._matchSqlid(option.sqlId), { ctx: Object.assign({}, option.context, globalThis[_Context]), isCount: false, ..._params });
         const { sql, params } = this._generSql(option!.dbType!, option.sql, _params);
         if (option.sync === SyncMode.Sync) {
             const result = option!.conn!.query<{ [K in keyof T]: T[K][] }>(SyncMode.Sync, sql, params);
@@ -3582,8 +3585,8 @@ export class SqlService<T extends object> {
     @P<T>()
     excute<L = T>(option: MethodOption & { sync?: SyncMode; sqlId?: string; sql?: string; params?: Record<string, any>; context?: any; }): number | Promise<number> {
         Throw.if(!option.sqlId && !option.sql, 'not found sql!');
-        const _params = Object.assign({}, option.context, option.params);
-        option.sql ??= globalThis[_sqlCache].load(this._matchSqlid(option.sqlId), { ctx: option.context, ..._params });
+        const _params = Object.assign({}, option.params);
+        option.sql ??= globalThis[_sqlCache].load(this._matchSqlid(option.sqlId), { ctx: Object.assign({}, option.context, globalThis[_Context]), ..._params });
         const { sql, params } = this._generSql(option!.dbType!, option.sql, _params);
         if (option.sync === SyncMode.Sync) {
             const result = option!.conn!.execute(SyncMode.Sync, sql, params);
@@ -3663,15 +3666,15 @@ export class SqlService<T extends object> {
                 sortType: option.sortType ?? undefined
             }
         );
-
-        let sql = globalThis[_sqlCache].load(this._matchSqlid(option.sqlId), { ctx: option.context, isCount: false, ...option.params });
+        const ctx = Object.assign({}, option.context, globalThis[_Context]);
+        let sql = globalThis[_sqlCache].load(this._matchSqlid(option.sqlId), { ctx, isCount: false, ...option.params });
         let sqlSum = '';
         let sqlCount = '';
         if (option.sum) {
             if (option.sumSelf) {
-                sqlCount = globalThis[_sqlCache].load(this._matchSqlid(`${option.sqlId}_sum`), { ctx: option.context, isCount: false, isSum: true, ...option.params });
+                sqlCount = globalThis[_sqlCache].load(this._matchSqlid(`${option.sqlId}_sum`), { ctx, isCount: false, isSum: true, ...option.params });
             } else {
-                sqlSum = globalThis[_sqlCache].load(this._matchSqlid(option.sqlId), { ctx: option.context, isCount: false, isSum: true, ...option.params });
+                sqlSum = globalThis[_sqlCache].load(this._matchSqlid(option.sqlId), { ctx, isCount: false, isSum: true, ...option.params });
             }
         }
         if (option.limitSelf !== true && option.pageSize > 0) {
@@ -3679,9 +3682,9 @@ export class SqlService<T extends object> {
         }
         if (option.pageSize > 0) {
             if (option.countSelf) {
-                sqlCount = globalThis[_sqlCache].load(this._matchSqlid(`${option.sqlId}_count`), { ctx: option.context, isCount: true, isSum: false, ...option.params });
+                sqlCount = globalThis[_sqlCache].load(this._matchSqlid(`${option.sqlId}_count`), { ctx, isCount: true, isSum: false, ...option.params });
             } else {
-                sqlCount = globalThis[_sqlCache].load(this._matchSqlid(option.sqlId), { ctx: option.context, isCount: true, isSum: false, ...option.params });
+                sqlCount = globalThis[_sqlCache].load(this._matchSqlid(option.sqlId), { ctx, isCount: true, isSum: false, ...option.params });
             }
         }
         if (option.sync === SyncMode.Sync) {

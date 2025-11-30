@@ -1,21 +1,21 @@
 import { DBType, _Hump, getEnums } from 'baja-lite-field';
-import { ColumnMode, GlobalSqlOptionForWeb, SqlCache, SqliteRemote, _DataConvert, _GlobalSqlOption, _dao, _defOption, _enum, _primaryDB, _sqlCache, logger } from './sql.js';
+import { ColumnMode, GlobalSqlOptionForWeb, SqlCache, SqliteRemote, _Context, _DataConvert, _GlobalSqlOption, _dao, _defOption, _enum, _primaryDB, _sqlCache, logger } from './sql.js';
 
 export const BootRomote = async function (options: GlobalSqlOptionForWeb) {
     globalThis[_GlobalSqlOption] = Object.assign({}, _defOption);
-    if(options.skipEmptyString !== undefined){
+    if (options.skipEmptyString !== undefined) {
         globalThis[_GlobalSqlOption].skipEmptyString = options.skipEmptyString;
     }
-    if(options.skipNull !== undefined){
+    if (options.skipNull !== undefined) {
         globalThis[_GlobalSqlOption].skipNull = options.skipNull;
     }
-    if(options.skipEmptyString !== undefined){
+    if (options.skipEmptyString !== undefined) {
         globalThis[_GlobalSqlOption].skipEmptyString = options.skipEmptyString;
     }
-    if(options.maxDeal !== undefined){
+    if (options.maxDeal !== undefined) {
         globalThis[_GlobalSqlOption].maxDeal = options.maxDeal;
     }
-    if(options.SqliteRemote !== undefined){
+    if (options.SqliteRemote !== undefined) {
         globalThis[_GlobalSqlOption].SqliteRemote = options.SqliteRemote;
     }
     globalThis[_Hump] = options.columnMode === ColumnMode.HUMP;
@@ -32,6 +32,9 @@ export const BootRomote = async function (options: GlobalSqlOptionForWeb) {
     }
     if (options.dataConvert) {
         globalThis[_DataConvert] = options.dataConvert;
+    }
+    if (options.ctx) {
+        globalThis[_Context] = options.ctx;
     }
     if (options.SqliteRemote && options.SqliteRemote.db) {
         if (typeof options.SqliteRemote.db === 'string') {

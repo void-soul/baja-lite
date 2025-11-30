@@ -1,6 +1,6 @@
 {
   "name": "baja-lite",
-  "version": "1.6.5",
+  "version": "1.6.7",
   "description": "some util for self",
   "homepage": "https://github.com/void-soul/baja-lite",
   "repository": {
@@ -37,38 +37,38 @@
   "dependencies": {
     "@msgpack/msgpack": "3.1.2",
     "@types/request-promise": "4.1.51",
-    "axios": "1.11.0",
+    "axios": "1.13.2",
     "baja-lite-field": "1.4.20",
     "decimal.js": "10.6.0",
     "html-parse-stringify": "3.0.1",
     "iterare": "1.2.1",
     "mustache": "4.2.0",
-    "pino": "9.9.0",
-    "pino-pretty": "13.1.1",
+    "pino": "10.1.0",
+    "pino-pretty": "13.1.2",
     "reflect-metadata": "0.2.2",
     "request": "2.88.2",
     "request-promise": "4.2.6",
-    "sql-formatter": "15.6.6",
+    "sql-formatter": "15.6.10",
     "sqlstring": "2.3.3",
     "tslib": "2.8.1"
   },
   "devDependencies": {
     "@types/better-sqlite3": "7.6.13",
     "@types/mustache": "4.2.6",
-    "@types/node": "24.3.0",
+    "@types/node": "24.10.1",
     "@types/shelljs": "0.8.17",
     "@types/sqlstring": "2.3.2",
-    "@typescript-eslint/eslint-plugin": "8.40.0",
-    "@typescript-eslint/parser": "8.40.0",
-    "better-sqlite3": "12.2.0",
-    "ioredis": "5.7.0",
-    "mongodb": "6.18.0",
-    "mysql2": "3.14.3",
+    "@typescript-eslint/eslint-plugin": "8.48.0",
+    "@typescript-eslint/parser": "8.48.0",
+    "better-sqlite3": "12.5.0",
+    "ioredis": "5.8.2",
+    "mongodb": "7.0.0",
+    "mysql2": "3.15.3",
     "pg": "8.16.3",
     "pg-pool": "3.10.1",
     "redlock": "5.0.0-beta.2",
     "shelljs": "0.10.0",
-    "typescript": "5.9.2"
+    "typescript": "5.9.3"
   },
   "engines": {
     "node": ">=20"
