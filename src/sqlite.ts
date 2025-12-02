@@ -1,7 +1,7 @@
 import { decode, encode } from "@msgpack/msgpack";
 import Sqlstring from 'sqlstring';
 import { snowflake } from './snowflake.js';
-import { SqliteRemoteInterface, extensionCodec, logger } from './sql.js';
+import { LoggerService, SqliteRemoteInterface, _LoggerService, extensionCodec } from './sql.js';
 export abstract class SqliteRemoteClass implements SqliteRemoteInterface {
     private dbList: Record<string, any> = {};
     /** 原始存放路径 */
@@ -25,20 +25,20 @@ export abstract class SqliteRemoteClass implements SqliteRemoteInterface {
     abstract trace: boolean;
     async execute(inData: Uint8Array): Promise<Uint8Array> {
         const [dbName, sql, params] = decode(inData) as [dbName: string, sql?: string | undefined, params?: any];
-        logger.debug(sql, params ?? '');
+        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         try {
             if (!sql) { return encode({ affectedRows: 0, insertId: 0n }, { extensionCodec }); };
             if (this.trace) {
-                logger.trace(Sqlstring.format(sql!, params));
+                (globalThis[_LoggerService]! as LoggerService).verbose?.(Sqlstring.format(sql!, params));
             }
             const result = this.dbList[dbName].prepare(sql).run(params ?? {});
             if (this.trace) {
-                logger.trace(result);
+                (globalThis[_LoggerService]! as LoggerService).verbose?.(result);
             }
             const { changes, lastInsertRowid } = result;
             return encode({ affectedRows: changes, insertId: lastInsertRowid ? BigInt(lastInsertRowid) : 0n }, { extensionCodec });
         } catch (error) {
-            logger.error(`
+            (globalThis[_LoggerService]! as LoggerService).error(`
                 error: ${error},
                 sql: ${sql},
                 params: ${params}
@@ -48,16 +48,14 @@ export abstract class SqliteRemoteClass implements SqliteRemoteInterface {
     }
     async pluck(inData: Uint8Array): Promise<Uint8Array> {
         const [dbName, sql, params] = decode(inData) as [dbName: string, sql?: string | undefined, params?: any];
-        logger.debug(sql, params ?? '');
+        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         try {
-            logger.debug(sql, params ?? '');
+            (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
             if (!sql) { return encode(null) };
-            if (this.trace) {
-                logger.trace(Sqlstring.format(sql!, params));
-            }
+            (globalThis[_LoggerService]! as LoggerService).verbose?.(Sqlstring.format(sql!, params));
             return encode(this.dbList[dbName].prepare(sql).pluck().get(params ?? {}), { extensionCodec });
         } catch (error) {
-            logger.error(`
+            (globalThis[_LoggerService]! as LoggerService).error(`
                 error: ${error},
                 sql: ${sql},
                 params: ${params}
@@ -67,14 +65,14 @@ export abstract class SqliteRemoteClass implements SqliteRemoteInterface {
     }
     async get(inData: Uint8Array): Promise<Uint8Array> {
         const [dbName, sql, params] = decode(inData) as [dbName: string, sql?: string | undefined, params?: any];
-        logger.debug(sql, params ?? '');
+        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         try {
             if (this.trace) {
-                logger.trace(Sqlstring.format(sql!, params));
+                (globalThis[_LoggerService]! as LoggerService).verbose?.(Sqlstring.format(sql!, params));
             }
             return encode(this.dbList[dbName].prepare(sql).get(params ?? {}), { extensionCodec });
         } catch (error) {
-            logger.error(`
+            (globalThis[_LoggerService]! as LoggerService).error(`
                 error: ${error},
                 sql: ${sql},
                 params: ${params}
@@ -84,15 +82,15 @@ export abstract class SqliteRemoteClass implements SqliteRemoteInterface {
     }
     async raw(inData: Uint8Array): Promise<Uint8Array> {
         const [dbName, sql, params] = decode(inData) as [dbName: string, sql?: string | undefined, params?: any];
-        logger.debug(sql, params ?? '');
+        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         try {
             if (!sql) { return encode([]); };
             if (this.trace) {
-                logger.trace(Sqlstring.format(sql!, params));
+                (globalThis[_LoggerService]! as LoggerService).verbose?.(Sqlstring.format(sql!, params));
             }
             return encode(this.dbList[dbName].prepare(sql).raw().all(params ?? {}), { extensionCodec });
         } catch (error) {
-            logger.error(`
+            (globalThis[_LoggerService]! as LoggerService).error(`
                 error: ${error},
                 sql: ${sql},
                 params: ${params}
@@ -102,15 +100,15 @@ export abstract class SqliteRemoteClass implements SqliteRemoteInterface {
     }
     async query(inData: Uint8Array): Promise<Uint8Array> {
         const [dbName, sql, params] = decode(inData) as [dbName: string, sql?: string | undefined, params?: any];
-        logger.debug(sql, params ?? '');
+        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         try {
             if (!sql) { encode([]); };
             if (this.trace) {
-                logger.trace(Sqlstring.format(sql!, params));
+                (globalThis[_LoggerService]! as LoggerService).verbose?.(Sqlstring.format(sql!, params));
             }
             return encode(this.dbList[dbName].prepare(sql).all(params ?? {}), { extensionCodec });
         } catch (error) {
-            logger.error(`
+            (globalThis[_LoggerService]! as LoggerService).error(`
                 error: ${error},
                 sql: ${sql},
                 params: ${params}
@@ -134,7 +132,7 @@ export abstract class SqliteRemoteClass implements SqliteRemoteInterface {
             `);
             this.dbList[dbName].function('UUID_SHORT', { deterministic: false }, () => snowflake.generate());
             this.dbList[dbName].function('UUID', { deterministic: false }, () => snowflake.generate());
-            this.dbList[dbName].function('TIME_TO_SEC', { deterministic: true }, (time: string) => time.split(':').map((v, i) => parseInt(v) * (i===0?360:i===1?60:0)).reduce((a, b) => a + b, 0));
+            this.dbList[dbName].function('TIME_TO_SEC', { deterministic: true }, (time: string) => time.split(':').map((v, i) => parseInt(v) * (i === 0 ? 360 : i === 1 ? 60 : 0)).reduce((a, b) => a + b, 0));
             this.dbList[dbName].function('IF', { deterministic: true }, (condition: any, v1: any, v2: any) => condition ? v1 : v2);
             this.dbList[dbName].function('RIGHT', { deterministic: true }, (src: string, p: number) => src.slice(p * -1));
             this.dbList[dbName].function('LEFT', { deterministic: true }, (str: string, len: number) => str?.substring(0, len) || null);

@@ -1,6 +1,6 @@
 import { _Hump, DBType, getEnums } from 'baja-lite-field';
 import events from 'events';
-import { _Context, _dao, _DataConvert, _defOption, _enum, _EventBus, _fs, _GlobalSqlOption, _path, _primaryDB, _sqlCache, ColumnMode, GlobalSqlOption, logger, Mysql, Postgresql, SqlCache, Sqlite, SqliteRemote } from './sql.js';
+import { _Context, _dao, _DataConvert, _defOption, _enum, _EventBus, _fs, _GlobalSqlOption, _LoggerService, _path, _primaryDB, _sqlCache, ColumnMode, GlobalSqlOption, LoggerService, Mysql, Postgresql, PrinterLogger, SqlCache, Sqlite, SqliteRemote } from './sql.js';
 
 export const Boot = async function (options: GlobalSqlOption) {
     globalThis[_GlobalSqlOption] = Object.assign({}, _defOption);
@@ -16,8 +16,13 @@ export const Boot = async function (options: GlobalSqlOption) {
     if (options.maxDeal !== undefined) {
         globalThis[_GlobalSqlOption].maxDeal = options.maxDeal;
     }
+    if (options.logger) {
+        globalThis[_LoggerService] = options.logger;
+    } else {
+        globalThis[_LoggerService] = new PrinterLogger();
+    }
+    (globalThis[_LoggerService]! as LoggerService).setLogLevels(options.log ? (options.log instanceof Array ? options.log : [options.log]) : ['info']);
     globalThis[_Hump] = options.columnMode === ColumnMode.HUMP;
-    logger.level = options.log ?? 'info';
     globalThis[_sqlCache] = new SqlCache();
     if (options.sqlDir) {
         globalThis[_path] = await import('path');
@@ -149,7 +154,7 @@ export const Boot = async function (options: GlobalSqlOption) {
         const { EventEmitter } = await import('events');
         const event = new EventEmitter({ captureRejections: true });
         event.on('error', error => {
-            logger.error('event-bus', error);
+            (globalThis[_LoggerService]! as LoggerService).error('event-bus', error);
         });
         globalThis[_EventBus] = event;
     }

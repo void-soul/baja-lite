@@ -1,5 +1,5 @@
 import { DBType, _Hump, getEnums } from 'baja-lite-field';
-import { ColumnMode, GlobalSqlOptionForWeb, SqlCache, SqliteRemote, _Context, _DataConvert, _GlobalSqlOption, _dao, _defOption, _enum, _primaryDB, _sqlCache, logger } from './sql.js';
+import { ColumnMode, GlobalSqlOptionForWeb, LoggerService, PrinterLogger, SqlCache, SqliteRemote, _Context, _DataConvert, _GlobalSqlOption, _LoggerService, _dao, _defOption, _enum, _primaryDB, _sqlCache } from './sql.js';
 
 export const BootRomote = async function (options: GlobalSqlOptionForWeb) {
     globalThis[_GlobalSqlOption] = Object.assign({}, _defOption);
@@ -18,8 +18,13 @@ export const BootRomote = async function (options: GlobalSqlOptionForWeb) {
     if (options.SqliteRemote !== undefined) {
         globalThis[_GlobalSqlOption].SqliteRemote = options.SqliteRemote;
     }
+    if (options.logger) {
+        globalThis[_LoggerService] = options.logger;
+    } else {
+        globalThis[_LoggerService] = new PrinterLogger();
+    }
+    (globalThis[_LoggerService]! as LoggerService).setLogLevels(options.log ? (options.log instanceof Array ? options.log : [options.log]) : ['info']);
     globalThis[_Hump] = options.columnMode === ColumnMode.HUMP;
-    logger.level = options.log ?? 'info';
     globalThis[_sqlCache] = new SqlCache();
     if (options.sqlMap) {
         await globalThis[_sqlCache].init(options);

@@ -123,7 +123,7 @@ export async function go2() {
             database: 'sportevent',
             debug: false
         },
-        log: 'trace',
+        log: 'verbose',
         columnMode: ColumnMode.HUMP,
         sqlDir: 'E:/pro/my-sdk/baja-lite/xml',
         sqlMap: {

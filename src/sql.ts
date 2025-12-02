@@ -3,7 +3,7 @@ import { _columns, _columnsNoId, _def, _deleteState, _fields, _Hump, _ids, _inde
 import HTML from 'html-parse-stringify';
 import * as ite from 'iterare';
 import mustache, { PartialsOrLookupFn } from 'mustache';
-import pino from 'pino';
+import pino, { Logger } from 'pino';
 import { formatDialect, mysql, postgresql, sqlite } from 'sql-formatter';
 import tslib from 'tslib';
 import { convert, XML } from './convert-xml.js';
@@ -66,14 +66,15 @@ const _resultMap_SQLID = Symbol('resultMap_SQLID');
 export const _enum = Symbol('_enum');
 export const _GlobalSqlOption = Symbol('GlobalSqlOption');
 export const _EventBus = Symbol('EventBus');
+export const _LoggerService = Symbol('LoggerService');
 export const _path = Symbol('path');
 export const _fs = Symbol('fs');
-export const logger = pino({
-    name: 'sql',
-    transport: {
-        target: 'pino-pretty'
-    }
-});
+// export const logger = pino({
+//     name: 'sql',
+//     transport: {
+//         target: 'pino-pretty'
+//     }
+// });
 // export const logger =
 //     process.env['NODE_ENV'] !== 'production' ?
 //     pino({
@@ -274,7 +275,7 @@ export interface GlobalSqlOptionForWeb {
         service: SqliteRemoteInterface
     },
     /** 日志等级 */
-    log?: 'trace' | 'debug' | 'info' | 'warn',
+    log?: LogLevel[] | LogLevel,
     /**
      作用与sqlDir类似，不同在于sqlMap`不需要`目录，而是直接指定一个sqlModel对象，对象的格式和sqlDir的文件内容一样。
      ** 适用于简单使用
@@ -325,6 +326,8 @@ export interface GlobalSqlOptionForWeb {
     dataConvert?: Record<string, (data: any) => any>;
     /** 公开上下文 */
     ctx?: any;
+    /** 日志服务 */
+    logger?: LoggerService;
 }
 /**
  # 全局行为配置文件
@@ -603,25 +606,25 @@ class MysqlConnection implements Connection {
     execute(sync: SyncMode.Sync, sql?: string, params?: any): { affectedRows: number; insertId: bigint; };
     execute(sync: SyncMode.Async, sql?: string, params?: any): Promise<{ affectedRows: number; insertId: bigint; }>;
     execute(sync: SyncMode, sql?: string, params?: any): { affectedRows: number; insertId: bigint; } | Promise<{ affectedRows: number; insertId: bigint; }> {
-        logger.debug(sql, params ?? '');
+        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return { affectedRows: 0, insertId: 0n }; };
         if (sync === SyncMode.Sync) {
-            logger.warn('MYSQL not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('MYSQL not suppouted sync mode');
             return { affectedRows: 0, insertId: 0n };
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
-            logger.trace(`${sql}\n,${JSON.stringify(params ?? '')}`);
+            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
         return new Promise<{ affectedRows: number; insertId: bigint; }>(async (resolve, reject) => {
             try {
                 const [_result] = await this[_daoConnection].execute(sql, params);
                 const result = _result as any;
                 if (globalThis[_GlobalSqlOption].log === 'trace') {
-                    logger.trace(result);
+                    (globalThis[_LoggerService]! as LoggerService).verbose?.(result);
                 }
                 resolve({ affectedRows: result.affectedRows, insertId: result.insertId });
             } catch (error) {
-                logger.error(`
+                (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
@@ -634,14 +637,14 @@ class MysqlConnection implements Connection {
     pluck<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T | null;
     pluck<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T | null>;
     pluck<T = any>(sync: SyncMode, sql?: string, params?: any): T | null | Promise<T | null> {
-        logger.debug(sql, params ?? '');
+        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return null };
         if (sync === SyncMode.Sync) {
-            logger.warn('MYSQL not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('MYSQL not suppouted sync mode');
             return null;
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
-            logger.trace(`${sql}\n,${JSON.stringify(params ?? '')}`);
+            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
         return new Promise<T | null>(async (resolve, reject) => {
             try {
@@ -653,7 +656,7 @@ class MysqlConnection implements Connection {
                 }
                 resolve(null);
             } catch (error) {
-                logger.error(`
+                (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
@@ -666,25 +669,25 @@ class MysqlConnection implements Connection {
     get<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T | null;
     get<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T | null>;
     get<T = any>(sync: SyncMode, sql?: string, params?: any): T | null | Promise<T | null> {
-        logger.debug(sql, params ?? '');
+        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return null };
         if (sync === SyncMode.Sync) {
-            logger.warn('MYSQL not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('MYSQL not suppouted sync mode');
             return null;
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
-            logger.trace(`${sql}\n,${JSON.stringify(params ?? '')}`);
+            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
         return new Promise<T | null>(async (resolve, reject) => {
             try {
                 const [result] = await this[_daoConnection].query(sql, params);
                 if (globalThis[_GlobalSqlOption].log === 'trace') {
-                    logger.trace(result);
+                    (globalThis[_LoggerService]! as LoggerService).verbose?.(result);
                 }
                 if (result && result[0]) resolve(result[0] as T);
                 resolve(null);
             } catch (error) {
-                logger.error(`
+                (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
@@ -697,25 +700,25 @@ class MysqlConnection implements Connection {
     raw<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T[];
     raw<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T[]>;
     raw<T = any>(sync: SyncMode, sql?: string, params?: any): T[] | Promise<T[]> {
-        logger.debug(sql, params ?? '');
+        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return []; };
         if (sync === SyncMode.Sync) {
-            logger.warn('MYSQL not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('MYSQL not suppouted sync mode');
             return [];
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
-            logger.trace(`${sql}\n,${JSON.stringify(params ?? '')}`);
+            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
         return new Promise<T[]>(async (resolve, reject) => {
             try {
                 const [result] = await this[_daoConnection].query(sql, params);
                 if (globalThis[_GlobalSqlOption].log === 'trace') {
-                    logger.trace(result);
+                    (globalThis[_LoggerService]! as LoggerService).verbose?.(result);
                 }
                 if (result) resolve(result.map((i: any) => Object.values(i)[0]));
                 resolve([]);
             } catch (error) {
-                logger.error(`
+                (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
@@ -728,24 +731,24 @@ class MysqlConnection implements Connection {
     query<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T[];
     query<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T[]>;
     query<T = any>(sync: SyncMode, sql?: string, params?: any): T[] | Promise<T[]> {
-        logger.debug(sql, params ?? '');
+        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return []; };
         if (sync === SyncMode.Sync) {
-            logger.warn('MYSQL not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('MYSQL not suppouted sync mode');
             return [];
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
-            logger.trace(`${sql}\n,${JSON.stringify(params ?? '')}`);
+            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
         return new Promise<T[]>(async (resolve, reject) => {
             try {
                 const [result] = await this[_daoConnection].query(sql, params);
                 if (globalThis[_GlobalSqlOption].log === 'trace') {
-                    logger.trace(result);
+                    (globalThis[_LoggerService]! as LoggerService).verbose?.(result);
                 }
                 resolve(result);
             } catch (error) {
-                logger.error(`
+                (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
@@ -783,13 +786,13 @@ export class Mysql implements Dao {
     createConnection(sync: SyncMode.Async): Promise<Connection | null>;
     createConnection(sync: SyncMode): Connection | null | Promise<Connection | null> {
         if (sync === SyncMode.Sync) {
-            logger.error('MYSQL not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).error('MYSQL not suppouted sync mode');
             return null;
         };
         return new Promise<Connection>(async (resolve, reject) => {
             try {
                 const connection = await this[_daoDB].getConnection();
-                logger.debug('create new connection!');
+                (globalThis[_LoggerService]! as LoggerService).debug?.('create new connection!');
                 resolve(new MysqlConnection(connection));
             } catch (error) {
                 reject(error);
@@ -801,7 +804,7 @@ export class Mysql implements Dao {
     transaction<T = any>(sync: SyncMode.Async, fn: (conn: Connection) => Promise<T>, conn?: Connection | null): Promise<T | null>;
     transaction<T = any>(sync: SyncMode, fn: (conn: Connection) => T | Promise<T>, conn?: Connection | null): T | null | Promise<T | null> {
         if (sync === SyncMode.Sync) {
-            logger.warn('MYSQL not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('MYSQL not suppouted sync mode');
             return null;
         };
         return new Promise<T>(async (resolve, reject) => {
@@ -813,26 +816,26 @@ export class Mysql implements Dao {
             }
             if (conn?.[_inTransaction] !== true) {
                 needCommit = true;
-                logger.debug('beginTransaction begin!');
+                (globalThis[_LoggerService]! as LoggerService).debug?.('beginTransaction begin!');
                 await conn![_daoConnection].beginTransaction();
-                logger.debug('beginTransaction end!');
+                (globalThis[_LoggerService]! as LoggerService).debug?.('beginTransaction end!');
             }
             conn![_inTransaction] = true;
             try {
                 const result = await fn(conn!);
                 if (needCommit) {
-                    logger.debug('commit begin!');
+                    (globalThis[_LoggerService]! as LoggerService).debug?.('commit begin!');
                     await conn![_daoConnection].commit();
                     conn![_inTransaction] = false;
-                    logger.debug('commit end!');
+                    (globalThis[_LoggerService]! as LoggerService).debug?.('commit end!');
                 }
                 resolve(result);
             } catch (error) {
-                logger.debug('rollback begin!');
+                (globalThis[_LoggerService]! as LoggerService).debug?.('rollback begin!');
                 await conn![_daoConnection].rollback();
-                logger.debug('rollback end!');
+                (globalThis[_LoggerService]! as LoggerService).debug?.('rollback end!');
                 conn![_inTransaction] = false;
-                logger.error(error);
+                (globalThis[_LoggerService]! as LoggerService).error(error);
                 reject(error);
             } finally {
                 try {
@@ -840,9 +843,9 @@ export class Mysql implements Dao {
                         conn![_inTransaction] = false;
                     }
                     if (newConn) {
-                        logger.debug('release begin!');
+                        (globalThis[_LoggerService]! as LoggerService).debug?.('release begin!');
                         conn![_daoConnection].release();
-                        logger.debug('release end!');
+                        (globalThis[_LoggerService]! as LoggerService).debug?.('release end!');
                     }
                 } catch (error) {
                 }
@@ -884,14 +887,14 @@ class PostgresqlConnection implements Connection {
     execute(sync: SyncMode.Sync, sql?: string, params?: any): { affectedRows: number; insertId: bigint; };
     execute(sync: SyncMode.Async, sql?: string, params?: any): Promise<{ affectedRows: number; insertId: bigint; }>;
     execute(sync: SyncMode, sql?: string, params?: any): { affectedRows: number; insertId: bigint; } | Promise<{ affectedRows: number; insertId: bigint; }> {
-        logger.debug(sql, params ?? '');
+        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return { affectedRows: 0, insertId: 0n }; };
         if (sync === SyncMode.Sync) {
-            logger.warn('Postgresql not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('Postgresql not suppouted sync mode');
             return { affectedRows: 0, insertId: 0n };
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
-            logger.trace(`${sql}\n,${JSON.stringify(params ?? '')}`);
+            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
         return new Promise<{ affectedRows: number; insertId: bigint; }>(async (resolve, reject) => {
             try {
@@ -902,11 +905,11 @@ class PostgresqlConnection implements Connection {
                 });
                 const result = rowCount as any;
                 if (globalThis[_GlobalSqlOption].log === 'trace') {
-                    logger.trace(result);
+                    (globalThis[_LoggerService]! as LoggerService).verbose?.(result);
                 }
                 resolve({ affectedRows: result.affectedRows, insertId: result.insertId });
             } catch (error) {
-                logger.error(`
+                (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
@@ -919,14 +922,14 @@ class PostgresqlConnection implements Connection {
     pluck<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T | null;
     pluck<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T | null>;
     pluck<T = any>(sync: SyncMode, sql?: string, params?: any): T | null | Promise<T | null> {
-        logger.debug(sql, params ?? '');
+        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return null };
         if (sync === SyncMode.Sync) {
-            logger.warn('Postgresql not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('Postgresql not suppouted sync mode');
             return null;
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
-            logger.trace(`${sql}\n,${JSON.stringify(params ?? '')}`);
+            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
         return new Promise<T | null>(async (resolve, reject) => {
             try {
@@ -942,7 +945,7 @@ class PostgresqlConnection implements Connection {
                 }
                 resolve(null);
             } catch (error) {
-                logger.error(`
+                (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
@@ -955,14 +958,14 @@ class PostgresqlConnection implements Connection {
     get<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T | null;
     get<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T | null>;
     get<T = any>(sync: SyncMode, sql?: string, params?: any): T | null | Promise<T | null> {
-        logger.debug(sql, params ?? '');
+        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return null };
         if (sync === SyncMode.Sync) {
-            logger.warn('Postgresql not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('Postgresql not suppouted sync mode');
             return null;
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
-            logger.trace(`${sql}\n,${JSON.stringify(params ?? '')}`);
+            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
         return new Promise<T | null>(async (resolve, reject) => {
             try {
@@ -972,12 +975,12 @@ class PostgresqlConnection implements Connection {
                     values: params
                 });
                 if (globalThis[_GlobalSqlOption].log === 'trace') {
-                    logger.trace(rows);
+                    (globalThis[_LoggerService]! as LoggerService).verbose?.(rows);
                 }
                 if (rows && rows[0]) resolve(rows[0] as T);
                 resolve(null);
             } catch (error) {
-                logger.error(`
+                (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
@@ -990,14 +993,14 @@ class PostgresqlConnection implements Connection {
     raw<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T[];
     raw<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T[]>;
     raw<T = any>(sync: SyncMode, sql?: string, params?: any): T[] | Promise<T[]> {
-        logger.debug(sql, params ?? '');
+        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return []; };
         if (sync === SyncMode.Sync) {
-            logger.warn('Postgresql not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('Postgresql not suppouted sync mode');
             return [];
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
-            logger.trace(`${sql}\n,${JSON.stringify(params ?? '')}`);
+            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
         return new Promise<T[]>(async (resolve, reject) => {
             try {
@@ -1007,12 +1010,12 @@ class PostgresqlConnection implements Connection {
                     values: params
                 });
                 if (globalThis[_GlobalSqlOption].log === 'trace') {
-                    logger.trace(rows);
+                    (globalThis[_LoggerService]! as LoggerService).verbose?.(rows);
                 }
                 if (rows) resolve(rows.map((i: any) => Object.values(i)[0]));
                 resolve([]);
             } catch (error) {
-                logger.error(`
+                (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
@@ -1025,14 +1028,14 @@ class PostgresqlConnection implements Connection {
     query<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T[];
     query<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T[]>;
     query<T = any>(sync: SyncMode, sql?: string, params?: any): T[] | Promise<T[]> {
-        logger.debug(sql, params ?? '');
+        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return []; };
         if (sync === SyncMode.Sync) {
-            logger.warn('Postgresql not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('Postgresql not suppouted sync mode');
             return [];
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
-            logger.trace(`${sql}\n,${JSON.stringify(params ?? '')}`);
+            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
         return new Promise<T[]>(async (resolve, reject) => {
             try {
@@ -1042,11 +1045,11 @@ class PostgresqlConnection implements Connection {
                     values: params
                 });
                 if (globalThis[_GlobalSqlOption].log === 'trace') {
-                    logger.trace(rows);
+                    (globalThis[_LoggerService]! as LoggerService).verbose?.(rows);
                 }
                 resolve(rows);
             } catch (error) {
-                logger.error(`
+                (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
@@ -1084,13 +1087,13 @@ export class Postgresql implements Dao {
     createConnection(sync: SyncMode.Async): Promise<Connection | null>;
     createConnection(sync: SyncMode): Connection | null | Promise<Connection | null> {
         if (sync === SyncMode.Sync) {
-            logger.error('Postgresql not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).error('Postgresql not suppouted sync mode');
             return null;
         };
         return new Promise<Connection>(async (resolve, reject) => {
             try {
                 const connection = await this[_daoDB].connect();
-                logger.debug('create new connection!');
+                (globalThis[_LoggerService]! as LoggerService).debug?.('create new connection!');
                 resolve(new PostgresqlConnection(connection));
             } catch (error) {
                 reject(error);
@@ -1102,7 +1105,7 @@ export class Postgresql implements Dao {
     transaction<T = any>(sync: SyncMode.Async, fn: (conn: Connection) => Promise<T>, conn?: Connection | null): Promise<T | null>;
     transaction<T = any>(sync: SyncMode, fn: (conn: Connection) => T | Promise<T>, conn?: Connection | null): T | null | Promise<T | null> {
         if (sync === SyncMode.Sync) {
-            logger.warn('Postgresql not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('Postgresql not suppouted sync mode');
             return null;
         };
         return new Promise<T>(async (resolve, reject) => {
@@ -1114,26 +1117,26 @@ export class Postgresql implements Dao {
             }
             if (conn?.[_inTransaction] !== true) {
                 needCommit = true;
-                logger.debug('beginTransaction begin!');
+                (globalThis[_LoggerService]! as LoggerService).debug?.('beginTransaction begin!');
                 await conn![_daoConnection].query('BEGIN');
-                logger.debug('beginTransaction end!');
+                (globalThis[_LoggerService]! as LoggerService).debug?.('beginTransaction end!');
             }
             conn![_inTransaction] = true;
             try {
                 const result = await fn(conn!);
                 if (needCommit) {
-                    logger.debug('commit begin!');
+                    (globalThis[_LoggerService]! as LoggerService).debug?.('commit begin!');
                     await conn![_daoConnection].query('COMMIT');
                     conn![_inTransaction] = false;
-                    logger.debug('commit end!');
+                    (globalThis[_LoggerService]! as LoggerService).debug?.('commit end!');
                 }
                 resolve(result);
             } catch (error) {
-                logger.debug('rollback begin!');
+                (globalThis[_LoggerService]! as LoggerService).debug?.('rollback begin!');
                 await conn![_daoConnection].query('ROLLBACK');
-                logger.debug('rollback end!');
+                (globalThis[_LoggerService]! as LoggerService).debug?.('rollback end!');
                 conn![_inTransaction] = false;
-                logger.error(error);
+                (globalThis[_LoggerService]! as LoggerService).error(error);
                 reject(error);
             } finally {
                 try {
@@ -1141,9 +1144,9 @@ export class Postgresql implements Dao {
                         conn![_inTransaction] = false;
                     }
                     if (newConn) {
-                        logger.debug('release begin!');
+                        (globalThis[_LoggerService]! as LoggerService).debug?.('release begin!');
                         conn![_daoConnection].release();
-                        logger.debug('release end!');
+                        (globalThis[_LoggerService]! as LoggerService).debug?.('release end!');
                     }
                 } catch (error) {
                 }
@@ -1185,23 +1188,23 @@ class SqliteConnection implements Connection {
     execute(sync: SyncMode.Async, sql?: string, params?: any): Promise<{ affectedRows: number; insertId: bigint; }>;
     execute(sync: SyncMode, sql?: string, params?: any): { affectedRows: number; insertId: bigint; } | Promise<{ affectedRows: number; insertId: bigint; }> {
         try {
-            logger.debug(sql, params ?? '');
+            (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
             if (!sql) { return { affectedRows: 0, insertId: 0n }; };
             if (sync === SyncMode.Async) {
-                logger.warn(`SQLITE not suppoted async mode`);
+                (globalThis[_LoggerService]! as LoggerService).warn(`SQLITE not suppoted async mode`);
                 return { affectedRows: 0, insertId: 0n };
             };
             if (globalThis[_GlobalSqlOption].log === 'trace') {
-                logger.trace(`${sql}\n,${JSON.stringify(params ?? '')}`);
+                (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
             }
             const result = this[_daoConnection].prepare(sql).run(params ?? {});
             if (globalThis[_GlobalSqlOption].log === 'trace') {
-                logger.trace(result);
+                (globalThis[_LoggerService]! as LoggerService).verbose?.(result);
             }
             const { changes, lastInsertRowid } = result;
             return { affectedRows: changes, insertId: lastInsertRowid ? BigInt(lastInsertRowid) : 0n };
         } catch (error) {
-            logger.error(`
+            (globalThis[_LoggerService]! as LoggerService).error(`
                 error: ${error},
                 sql: ${sql},
                 params: ${params}
@@ -1214,18 +1217,18 @@ class SqliteConnection implements Connection {
     pluck<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T | null>;
     pluck<T = any>(sync: SyncMode, sql?: string, params?: any): T | null | Promise<T | null> {
         try {
-            logger.debug(sql, params ?? '');
+            (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
             if (!sql) { return null };
             if (sync === SyncMode.Async) {
-                logger.warn(`SQLITE not suppoted async mode`);
+                (globalThis[_LoggerService]! as LoggerService).warn(`SQLITE not suppoted async mode`);
                 return null;
             };
             if (globalThis[_GlobalSqlOption].log === 'trace') {
-                logger.trace(`${sql}\n,${JSON.stringify(params ?? '')}`);
+                (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
             }
             return this[_daoConnection].prepare(sql).pluck().get(params ?? {});
         } catch (error) {
-            logger.error(`
+            (globalThis[_LoggerService]! as LoggerService).error(`
                 error: ${error},
                 sql: ${sql},
                 params: ${params}
@@ -1238,15 +1241,15 @@ class SqliteConnection implements Connection {
     get<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T | null>;
     get<T = any>(sync: SyncMode, sql?: string, params?: any): T | null | Promise<T | null> {
         try {
-            logger.debug(sql, params ?? '');
+            (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
             if (!sql) { return null };
             if (sync === SyncMode.Async) { return null };
             if (globalThis[_GlobalSqlOption].log === 'trace') {
-                logger.trace(`${sql}\n,${JSON.stringify(params ?? '')}`);
+                (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
             }
             return this[_daoConnection].prepare(sql).get(params ?? {});
         } catch (error) {
-            logger.error(`
+            (globalThis[_LoggerService]! as LoggerService).error(`
                 error: ${error},
                 sql: ${sql},
                 params: ${params}
@@ -1259,18 +1262,18 @@ class SqliteConnection implements Connection {
     raw<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T[]>;
     raw<T = any>(sync: SyncMode, sql?: string, params?: any): T[] | Promise<T[]> {
         try {
-            logger.debug(sql, params ?? '');
+            (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
             if (!sql) { return []; };
             if (sync === SyncMode.Async) {
-                logger.warn(`SQLITE not suppoted async mode`);
+                (globalThis[_LoggerService]! as LoggerService).warn(`SQLITE not suppoted async mode`);
                 return [];
             };
             if (globalThis[_GlobalSqlOption].log === 'trace') {
-                logger.trace(`${sql}\n,${JSON.stringify(params ?? '')}`);
+                (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
             }
             return this[_daoConnection].prepare(sql).raw().all(params ?? {});
         } catch (error) {
-            logger.error(`
+            (globalThis[_LoggerService]! as LoggerService).error(`
                 error: ${error},
                 sql: ${sql},
                 params: ${params}
@@ -1283,18 +1286,18 @@ class SqliteConnection implements Connection {
     query<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T[]>;
     query<T = any>(sync: SyncMode, sql?: string, params?: any): T[] | Promise<T[]> {
         try {
-            logger.debug(sql, params ?? '');
+            (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
             if (!sql) { return []; };
             if (sync === SyncMode.Async) {
-                logger.warn(`SQLITE not suppoted async mode`);
+                (globalThis[_LoggerService]! as LoggerService).warn(`SQLITE not suppoted async mode`);
                 return [];
             };
             if (globalThis[_GlobalSqlOption].log === 'trace') {
-                logger.trace(`${sql}\n,${JSON.stringify(params ?? '')}`);
+                (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
             }
             return this[_daoConnection].prepare(sql).all(params ?? {});
         } catch (error) {
-            logger.error(`
+            (globalThis[_LoggerService]! as LoggerService).error(`
                 error: ${error},
                 sql: ${sql},
                 params: ${params}
@@ -1353,7 +1356,7 @@ export class Sqlite implements Dao {
     createConnection(sync: SyncMode.Async): Promise<Connection | null>;
     createConnection(sync: SyncMode): Connection | null | Promise<Connection | null> {
         if (sync === SyncMode.Async) {
-            logger.error(`SQLITE not suppoted async mode`);
+            (globalThis[_LoggerService]! as LoggerService).error(`SQLITE not suppoted async mode`);
             return null;
         };
         return new SqliteConnection(this[_daoDB]);
@@ -1363,7 +1366,7 @@ export class Sqlite implements Dao {
     transaction<T = any>(sync: SyncMode.Async, fn: (conn: Connection) => Promise<T>, conn?: Connection | null): Promise<T | null>;
     transaction<T = any>(sync: SyncMode, fn: (conn: Connection) => T | Promise<T>, conn?: Connection | null): T | null | Promise<T | null> {
         if (sync === SyncMode.Async) {
-            logger.warn(`SQLITE not suppoted async mode`);
+            (globalThis[_LoggerService]! as LoggerService).warn(`SQLITE not suppoted async mode`);
             return null;
         };
         if (!conn) {
@@ -1422,14 +1425,14 @@ export class SqliteRemoteConnection implements Connection {
     execute(sync: SyncMode.Sync, sql?: string, params?: any): { affectedRows: number; insertId: bigint; };
     execute(sync: SyncMode.Async, sql?: string, params?: any): Promise<{ affectedRows: number; insertId: bigint; }>;
     execute(sync: SyncMode, sql?: string, params?: any): { affectedRows: number; insertId: bigint; } | Promise<{ affectedRows: number; insertId: bigint; }> {
-        logger.debug(sql, params ?? '');
+        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return { affectedRows: 0, insertId: 0n }; };
         if (sync === SyncMode.Sync) {
-            logger.warn('SqliteRemote not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('SqliteRemote not suppouted sync mode');
             return { affectedRows: 0, insertId: 0n };
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
-            logger.trace(`${sql}\n,${JSON.stringify(params ?? '')}`);
+            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
         return new Promise<{ affectedRows: number; insertId: bigint; }>(async (resolve, reject) => {
             try {
@@ -1437,7 +1440,7 @@ export class SqliteRemoteConnection implements Connection {
                 const { affectedRows, insertId } = decode(data, { extensionCodec }) as { affectedRows: number; insertId: bigint; };
                 resolve({ affectedRows, insertId: insertId ? BigInt(insertId) : 0n });
             } catch (error) {
-                logger.error(`
+                (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
@@ -1450,14 +1453,14 @@ export class SqliteRemoteConnection implements Connection {
     pluck<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T | null;
     pluck<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T | null>;
     pluck<T = any>(sync: SyncMode, sql?: string, params?: any): T | null | Promise<T | null> {
-        logger.debug(sql, params ?? '');
+        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return null };
         if (sync === SyncMode.Sync) {
-            logger.warn('SqliteRemote not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('SqliteRemote not suppouted sync mode');
             return null;
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
-            logger.trace(`${sql}\n,${JSON.stringify(params ?? '')}`);
+            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
         return new Promise<T | null>(async (resolve, reject) => {
             try {
@@ -1465,7 +1468,7 @@ export class SqliteRemoteConnection implements Connection {
                 const r = decode(data, { extensionCodec }) as T;
                 resolve(r);
             } catch (error) {
-                logger.error(`
+                (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
@@ -1478,14 +1481,14 @@ export class SqliteRemoteConnection implements Connection {
     get<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T | null;
     get<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T | null>;
     get<T = any>(sync: SyncMode, sql?: string, params?: any): T | null | Promise<T | null> {
-        logger.debug(sql, params ?? '');
+        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return null };
         if (sync === SyncMode.Sync) {
-            logger.warn('SqliteRemote not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('SqliteRemote not suppouted sync mode');
             return null;
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
-            logger.trace(`${sql}\n,${JSON.stringify(params ?? '')}`);
+            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
         return new Promise<T | null>(async (resolve, reject) => {
             try {
@@ -1493,7 +1496,7 @@ export class SqliteRemoteConnection implements Connection {
                 const r = decode(data, { extensionCodec }) as T;
                 resolve(r);
             } catch (error) {
-                logger.error(`
+                (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
@@ -1506,14 +1509,14 @@ export class SqliteRemoteConnection implements Connection {
     raw<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T[];
     raw<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T[]>;
     raw<T = any>(sync: SyncMode, sql?: string, params?: any): T[] | Promise<T[]> {
-        logger.debug(sql, params ?? '');
+        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return []; };
         if (sync === SyncMode.Sync) {
-            logger.warn('SqliteRemote not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('SqliteRemote not suppouted sync mode');
             return [];
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
-            logger.trace(`${sql}\n,${JSON.stringify(params ?? '')}`);
+            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
         return new Promise<T[]>(async (resolve, reject) => {
             try {
@@ -1521,7 +1524,7 @@ export class SqliteRemoteConnection implements Connection {
                 const r = decode(data, { extensionCodec }) as T[];
                 resolve(r);
             } catch (error) {
-                logger.error(`
+                (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
@@ -1534,14 +1537,14 @@ export class SqliteRemoteConnection implements Connection {
     query<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T[];
     query<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T[]>;
     query<T = any>(sync: SyncMode, sql?: string, params?: any): T[] | Promise<T[]> {
-        logger.debug(sql, params ?? '');
+        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return []; };
         if (sync === SyncMode.Sync) {
-            logger.warn('SqliteRemote not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('SqliteRemote not suppouted sync mode');
             return [];
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
-            logger.trace(`${sql}\n,${JSON.stringify(params ?? '')}`);
+            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
         return new Promise<T[]>(async (resolve, reject) => {
             try {
@@ -1549,7 +1552,7 @@ export class SqliteRemoteConnection implements Connection {
                 const r = decode(data, { extensionCodec }) as T[];
                 resolve(r);
             } catch (error) {
-                logger.error(`
+                (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
@@ -1579,7 +1582,7 @@ export class SqliteRemote implements Dao {
     createConnection(sync: SyncMode.Async): Promise<Connection | null>;
     createConnection(sync: SyncMode): Connection | null | Promise<Connection | null> {
         if (sync === SyncMode.Sync) {
-            logger.error('SQLITEREMOTE not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).error('SQLITEREMOTE not suppouted sync mode');
             return null;
         };
         return new Promise<Connection>(async (resolve, reject) => {
@@ -1597,7 +1600,7 @@ export class SqliteRemote implements Dao {
     transaction<T = any>(sync: SyncMode.Sync, fn: (conn: Connection) => T, conn?: Connection | null): T | null;
     transaction<T = any>(sync: SyncMode.Async, fn: (conn: Connection) => Promise<T>, conn?: Connection | null): Promise<T | null>;
     transaction<T = any>(sync: SyncMode, fn: (conn: Connection) => T | Promise<T>, conn?: Connection | null): T | null | Promise<T | null> {
-        logger.warn(`SQLITEREMOTE not suppoted transaction`);
+        (globalThis[_LoggerService]! as LoggerService).warn(`SQLITEREMOTE not suppoted transaction`);
         return null;
     }
 
@@ -2052,27 +2055,27 @@ export class SqlCache {
                 const name = globalThis[_path].basename(modeName, extname);
                 let ct = 0;
                 if (extname === '.mu') {
-                    logger.debug(`sql: ${file} start explain!`);
+                    (globalThis[_LoggerService]! as LoggerService).debug?.(`sql: ${file} start explain!`);
                     const parser = new MUParser(rootName || name, globalThis[_fs].readFileSync(file, { encoding: 'utf-8' }).toString());
                     let source = parser.next();
                     while (source != null) {
                         ct++;
                         this.sqlMap[source[0]] = source[1];
-                        logger.debug(`sql: ${source[0]} found!`);
+                        (globalThis[_LoggerService]! as LoggerService).debug?.(`sql: ${source[0]} found!`);
                         source = parser.next();
                     }
-                    logger.debug(`sql: ${file} explain over[${ct}]!`);
+                    (globalThis[_LoggerService]! as LoggerService).debug?.(`sql: ${file} explain over[${ct}]!`);
                 } else if (jsMode && extname === '.js') {
-                    logger.debug(`sql: ${file} start explain!`);
+                    (globalThis[_LoggerService]! as LoggerService).debug?.(`sql: ${file} start explain!`);
                     const obj = (await import(globalThis[_path].join(sqlDir, modeName))).default as _SqlModel;
                     for (const [key, fn] of Object.entries(obj)) {
                         ct++;
 
                         this.sqlMap[`${rootName || name}.${String(key)}`] = fn;
                     }
-                    logger.debug(`sql: ${file} explain over[${ct}]!`);
+                    (globalThis[_LoggerService]! as LoggerService).debug?.(`sql: ${file} explain over[${ct}]!`);
                 } else if (extname === '.xml') {
-                    logger.debug(`sql: ${file} start explain!`);
+                    (globalThis[_LoggerService]! as LoggerService).debug?.(`sql: ${file} start explain!`);
                     const root = (HTML.parse(replaceCdata(globalThis[_fs].readFileSync(file, { encoding: 'utf-8' }).toString())) as XML[])[0];
                     if (root) {
                         const mappers = root.children;
@@ -2089,14 +2092,14 @@ export class SqlCache {
                                             const keys: SqlMapper = [];
                                             this.readResultMap(am.children, keys, []);
                                             globalThis[_resultMap][`${rootName || name}.${am.id}`] = keys;
-                                            logger.debug(`sql_resultMap: ${`${rootName || name}.${am.id}`} found!`);
+                                            (globalThis[_LoggerService]! as LoggerService).debug?.(`sql_resultMap: ${`${rootName || name}.${am.id}`} found!`);
                                         } else {
                                             this.sqlMap[`${rootName || name}.${am.id!}`] = am.children;
                                             if (am.attrs['resultMap']) {
                                                 globalThis[_resultMap_SQLID][`${rootName || name}.${am.id!}`] = am.attrs['resultMap'];
-                                                logger.debug(`sql: autoMapper: ${rootName || name}.${am.id!}-${am.attrs['resultMap']}`);
+                                                (globalThis[_LoggerService]! as LoggerService).debug?.(`sql: autoMapper: ${rootName || name}.${am.id!}-${am.attrs['resultMap']}`);
                                             }
-                                            logger.debug(`sql: ${rootName || name}.${am.id!} found!`);
+                                            (globalThis[_LoggerService]! as LoggerService).debug?.(`sql: ${rootName || name}.${am.id!} found!`);
                                             ct++;
                                         }
                                     }
@@ -2104,7 +2107,7 @@ export class SqlCache {
                             }
                         }
                     }
-                    logger.debug(`sql: ${file} explain over[${ct}]!`);
+                    (globalThis[_LoggerService]! as LoggerService).debug?.(`sql: ${file} explain over[${ct}]!`);
                 }
 
             }
@@ -2273,7 +2276,7 @@ function P<T extends object>(skipConn = false) {
                 }
                 try {
                     const result = fn.call(this, ...args);
-                    logger.info(`${propertyKey}:${(option as any).sqlId ?? option!.tableName}:use ${+new Date() - startTime}ms`);
+                    (globalThis[_LoggerService]! as LoggerService).log(`${propertyKey}:${(option as any).sqlId ?? option!.tableName}:use ${+new Date() - startTime}ms`);
                     return result;
                 } catch (error) {
                     console.error(`${(option as any).sqlId ?? option.tableName} service ${propertyKey} have an error:${error}, it's argumens: ${JSON.stringify(args.filter(i => typeof i !== 'object' || (typeof i === 'object' && !i.insert)))}`);
@@ -2307,7 +2310,7 @@ function P<T extends object>(skipConn = false) {
                     }
                     try {
                         const result = await fn.call(this, ...args);
-                        logger.info(`${propertyKey}:${(option as any).sqlId ?? option!.tableName}:use ${+new Date() - startTime}ms`);
+                        (globalThis[_LoggerService]! as LoggerService).log(`${propertyKey}:${(option as any).sqlId ?? option!.tableName}:use ${+new Date() - startTime}ms`);
                         resolve(result);
                     } catch (error) {
                         console.error(`${(option as any).sqlId ?? option!.tableName} service ${propertyKey} have an error:${error}, it's argumens: ${JSON.stringify(args.filter(i => typeof i !== 'object' || (typeof i === 'object' && !i.insert)))}`)
@@ -2334,7 +2337,7 @@ function P<T extends object>(skipConn = false) {
                             needRealseConn = false;
                         }
                         const result = await fn.call(this, ...args);
-                        logger.info(`${propertyKey}:${(option as any).sqlId ?? option!.tableName}:use ${+new Date() - startTime}ms`);
+                        (globalThis[_LoggerService]! as LoggerService).log(`${propertyKey}:${(option as any).sqlId ?? option!.tableName}:use ${+new Date() - startTime}ms`);
                         resolve(result);
                     } catch (error) {
                         console.error(`${(option as any).sqlId ?? option!.tableName} service ${propertyKey} have an error:${error}, it's argumens: ${JSON.stringify(args.filter(i => typeof i !== 'object' || (typeof i === 'object' && !i.insert)))}`)
@@ -2360,7 +2363,7 @@ function P<T extends object>(skipConn = false) {
                             needRealseConn = false;
                         }
                         const result = await fn.call(this, ...args);
-                        logger.info(`${propertyKey}:${(option as any).sqlId ?? option!.tableName}:use ${+new Date() - startTime}ms`);
+                        (globalThis[_LoggerService]! as LoggerService).log(`${propertyKey}:${(option as any).sqlId ?? option!.tableName}:use ${+new Date() - startTime}ms`);
                         resolve(result);
                     } catch (error) {
                         console.error(`${(option as any).sqlId ?? option!.tableName} service ${propertyKey} have an error:${error}, it's argumens: ${JSON.stringify(args.filter(i => typeof i !== 'object' || (typeof i === 'object' && !i.insert)))}`)
@@ -5228,21 +5231,21 @@ export async function excuteWithLock<T>(config: {
         const lock = await GetRedisLock(key, config.lockMaxActive);
         if (lock === false) {
             if (config.lockWait !== false && ((config.lockMaxWaitTime ?? 0) === 0 || (wait_time + (config.lockRetryInterval ?? 100)) <= (config.lockMaxWaitTime ?? 0))) {
-                logger.debug(`get lock ${key} fail, retry after ${config.lockRetryInterval ?? 100}ms...`);
+                (globalThis[_LoggerService]! as LoggerService).debug?.(`get lock ${key} fail, retry after ${config.lockRetryInterval ?? 100}ms...`);
                 await sleep(config.lockRetryInterval ?? 100);
                 wait_time += (config.lockRetryInterval ?? 100);
                 return await fn();
             } else {
-                logger.debug(`get lock ${key} fail`);
+                (globalThis[_LoggerService]! as LoggerService).debug?.(`get lock ${key} fail`);
                 throw new Error(config.errorMessage || `get lock fail: ${key}`);
             }
         } else {
-            logger.debug(`get lock ${key} ok!`);
+            (globalThis[_LoggerService]! as LoggerService).debug?.(`get lock ${key} ok!`);
             await db.pexpire(key, config.lockMaxTime ?? 60000);
             try {
                 return await fn__();
             } finally {
-                logger.debug(`unlock ${key} ok!`);
+                (globalThis[_LoggerService]! as LoggerService).debug?.(`unlock ${key} ok!`);
                 await db.decr(key);
             }
         }
@@ -5347,7 +5350,7 @@ async function clearParent(clearKey: string) {
     const keys = await db.smembers(`[cache-parent]${clearKey}`);
     if (keys) {
         for (const key of keys) {
-            logger.debug(`cache ${key} cleared!`);
+            (globalThis[_LoggerService]! as LoggerService).debug?.(`cache ${key} cleared!`);
             await clearChild(key);
         }
     }
@@ -5369,10 +5372,10 @@ export async function excuteWithCache<T>(config: {
     const db = getRedisDB();
     const cache = await db.get(`[cache]${config.key}`);
     if (cache) {
-        logger.debug(`cache ${config.key} hit!`);
+        (globalThis[_LoggerService]! as LoggerService).debug?.(`cache ${config.key} hit!`);
         return JSON.parse(cache as string);
     } else {
-        logger.debug(`cache ${config.key} miss!`);
+        (globalThis[_LoggerService]! as LoggerService).debug?.(`cache ${config.key} miss!`);
         const result = await fn();
         await setMethodCache({
             key: config.key,
@@ -5401,10 +5404,10 @@ export function MethodCache<T = any>(config: {
             const db = getRedisDB();
             const cache = await db.get(`[cache]${key}`);
             if (cache) {
-                logger.debug(`cache ${key} hit!`);
+                (globalThis[_LoggerService]! as LoggerService).debug?.(`cache ${key} hit!`);
                 return JSON.parse(cache);
             } else {
-                logger.debug(`cache ${key} miss!`);
+                (globalThis[_LoggerService]! as LoggerService).debug?.(`cache ${key} miss!`);
                 const result = await fn.call(this, ...args);
                 const clearKey = config.clearKey ? typeof config.clearKey === 'function' ? config.clearKey.call(this, ...args) : config.clearKey : undefined;
                 await setMethodCache({
@@ -5528,5 +5531,70 @@ class MUParser {
             sb.push(str);
         }
         return sb.join(this.lineSeparator);
+    }
+}
+export declare const LOG_LEVELS: ["verbose", "debug", "info", "warn", "error", "fatal"];
+export type LogLevel = (typeof LOG_LEVELS)[number];
+export interface LoggerService {
+    /**
+     * Write a 'log' level log.
+     */
+    log(message: any, ...optionalParams: any[]): any;
+    /**
+     * Write an 'error' level log.
+     */
+    error(message: any, ...optionalParams: any[]): any;
+    /**
+     * Write a 'warn' level log.
+     */
+    warn(message: any, ...optionalParams: any[]): any;
+    /**
+     * Write a 'debug' level log.
+     */
+    debug?(message: any, ...optionalParams: any[]): any;
+    /**
+     * Write a 'verbose' level log.
+     */
+    verbose?(message: any, ...optionalParams: any[]): any;
+    /**
+     * Write a 'fatal' level log.
+     */
+    fatal?(message: any, ...optionalParams: any[]): any;
+    /**
+     * Set log levels.
+     * @param levels log levels
+     */
+    setLogLevels(levels: LogLevel[]): any;
+}
+export class PrinterLogger implements LoggerService {
+    private logger: Logger;
+    constructor() {
+        this.logger = pino({
+            name: 'app',
+            transport: {
+                target: 'pino-pretty',
+            },
+        });
+    }
+    log(message: any, ...optionalParams: any[]) {
+        this.logger.info(message, ...optionalParams);
+    }
+    fatal(message: any, ...optionalParams: any[]) {
+        this.logger.fatal(message, ...optionalParams);
+    }
+    error(message: any, ...optionalParams: any[]) {
+        this.logger.error(message, ...optionalParams);
+    }
+    warn(message: any, ...optionalParams: any[]) {
+        this.logger.warn(message, ...optionalParams);
+    }
+    debug?(message: any, ...optionalParams: any[]) {
+        this.logger.debug(message, ...optionalParams);
+    }
+    verbose?(message: any, ...optionalParams: any[]) {
+        this.logger.trace(message, ...optionalParams);
+    }
+    setLogLevels(levels: LogLevel[]) {
+        this.logger.level = levels.join(',');
     }
 }
