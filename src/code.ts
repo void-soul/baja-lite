@@ -34,6 +34,7 @@ const lxMap = {
     text: "string",
     mediumtext: "string",
     longtext: "string",
+    json: '',
     enum: "string",
     set: "string",
     binary: "string",

@@ -4135,8 +4135,8 @@ class StreamQuery<T extends object> {
     private _groups: string[] = [];
     private _orders: string[] = [];
 
-    private _startRow = 0;
-    private _pageSize = 0;
+    private _startRow = -1;
+    private _pageSize = -1;
 
     private _service: SqlService<T>;
     private [_fields]: Record<string, AField>;
@@ -4154,8 +4154,8 @@ class StreamQuery<T extends object> {
         this._wheres.length = 0;
         this._param = {};
         this._paramKeys = {};
-        this._pageSize = 0;
-        this._startRow = 0;
+        this._pageSize = -1;
+        this._startRow = -1;
         this._orders.length = 0;
         this._groups.length = 0;
         this._columns.length = 0;
@@ -4649,9 +4649,9 @@ class StreamQuery<T extends object> {
             ${this._groups.length > 0 ? `GROUP BY ${this._groups.join(',')} ` : ''}
             ${this._orders.length > 0 ? `ORDER BY ${this._orders.join(',')} ` : ''}
         `;
-        if (this._startRow && this._pageSize) {
+        if (this._startRow >= 0 && this._pageSize >= 0) {
             sql += `LIMIT ${this._startRow}, ${this._pageSize}`;
-        } else if (this._startRow) {
+        } else if (this._startRow >= 0) {
             sql += `LIMIT ${this._startRow}`;
         }
         if (option.sync === SyncMode.Async) {
@@ -4693,9 +4693,9 @@ class StreamQuery<T extends object> {
             ${this._groups.length > 0 ? `GROUP BY ${this._groups.join(',')} ` : ''}
             ${this._orders.length > 0 ? `ORDER BY ${this._orders.join(',')} ` : ''}
         `;
-        if (this._startRow && this._pageSize) {
+        if (this._startRow >= 0 && this._pageSize >= 0) {
             sql += `LIMIT ${this._startRow}, ${this._pageSize}`;
-        } else if (this._startRow) {
+        } else if (this._startRow >= 0) {
             sql += `LIMIT ${this._startRow}`;
         }
         const sqlCount = `
