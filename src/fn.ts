@@ -139,7 +139,8 @@ export enum ExcuteSplitMode {
   ## 分割数组方式:2种，选择一种即可
   1. everyLength=每组个数(最后一组可能不足次数)
   2. groupCount=拆分几组
-  ## settled 异步执行是否并行执行? 默认false
+  ## `settled` 异步执行是否并行执行? 默认false。
+  ** 注意：开启并行执行时，请确保 `fn` 内部没有共享状态（如共用同一个数据库连接），否则可能导致冲突。
   ## `extendParams`：扩展参数
   ** 数组
   ** 结合分组方式：groupCount使用。例如:
@@ -222,7 +223,11 @@ export function excuteSplit<T = any, R = any, E = any>(
       try {
         const reasons: R[] = [];
         if (settled) {
-          const result = await Promise.allSettled(list.map((list, i) => fn(list, i, list.length, extendParams[i])));
+          const result = await Promise.allSettled(list.map((list, i) => {
+            const startIndex = i * ps.everyLength;
+            const endIndex = startIndex + list.length - 1;
+            return fn(list, i, list.length, extendParams[i], startIndex, endIndex);
+          }));
           for (const item of result) {
             if (item.status === 'rejected') {
               reject(item.reason);
@@ -232,7 +237,7 @@ export function excuteSplit<T = any, R = any, E = any>(
           }
         } else {
           for (let i = 0; i < list.length; i++) {
-            const startIndex = (i - 1) * ps.everyLength;
+            const startIndex = i * ps.everyLength;
             const endIndex = startIndex + list[i]!.length - 1;
             reasons.push(await fn(list[i]!, i, list.length, extendParams[i], startIndex, endIndex));
           }
@@ -247,7 +252,11 @@ export function excuteSplit<T = any, R = any, E = any>(
       try {
         const reasons: { result: R[]; error: string[]; } = { result: [], error: [] };
         if (settled) {
-          const result = await Promise.allSettled(list.map((list, i) => fn(list, i, list.length, extendParams[i])));
+          const result = await Promise.allSettled(list.map((list, i) => {
+            const startIndex = i * ps.everyLength;
+            const endIndex = startIndex + list.length - 1;
+            return fn(list, i, list.length, extendParams[i], startIndex, endIndex);
+          }));
           for (const item of result) {
             if (item.status === 'rejected') {
               reasons.error.push(item.reason);
@@ -257,12 +266,12 @@ export function excuteSplit<T = any, R = any, E = any>(
           }
         } else {
           for (let i = 0; i < list.length; i++) {
-            const startIndex = (i - 1) * ps.everyLength;
+            const startIndex = i * ps.everyLength;
             const endIndex = startIndex + list[i]!.length - 1;
             try {
               reasons.result.push(await fn(list[i]!, i, list.length, extendParams[i], startIndex, endIndex));
             } catch (error) {
-              reasons.error.push(error as string);
+              reasons.error.push(error as any);
             }
           }
         }
@@ -274,7 +283,7 @@ export function excuteSplit<T = any, R = any, E = any>(
   } else if (sync === ExcuteSplitMode.SyncTrust) {
     const reasons: R[] = [];
     for (let i = 0; i < list.length; i++) {
-      const startIndex = (i - 1) * ps.everyLength;
+      const startIndex = i * ps.everyLength;
       const endIndex = startIndex + list[i]!.length - 1;
       reasons.push(fn(list[i]!, i, list.length, extendParams[i], startIndex, endIndex) as R);
     }
@@ -283,11 +292,11 @@ export function excuteSplit<T = any, R = any, E = any>(
     const reasons: { result: R[]; error: string[]; } = { result: [], error: [] };
     for (let i = 0; i < list.length; i++) {
       try {
-        const startIndex = (i - 1) * ps.everyLength;
-        const endIndex = startIndex + list[i]!.length - 1;
+        const startIndex = i * ps.everyLength;
+        const endIndex = startIndex + list[i]!.length - 0;
         reasons.result.push(fn(list[i]!, i, list.length, extendParams[i], startIndex, endIndex) as R);
       } catch (error) {
-        reasons.error.push(error as string);
+        reasons.error.push(error as any);
       }
     }
     return reasons;

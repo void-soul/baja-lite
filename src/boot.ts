@@ -1,6 +1,6 @@
 import { _Hump, DBType, getEnums } from 'baja-lite-field';
 import events from 'events';
-import { _Context, _dao, _DataConvert, _defOption, _enum, _EventBus, _fs, _GlobalSqlOption, _LoggerService, _path, _primaryDB, _sqlCache, ColumnMode, GlobalSqlOption, LoggerService, Mysql, Postgresql, PrinterLogger, SqlCache, Sqlite, SqliteRemote } from './sql.js';
+import { _Context, _dao, _DataConvert, _defOption, _enum, _EventBus, _fs, _GlobalSqlOption, _LoggerService, _MysqlKeepAliveTime, _path, _primaryDB, _sqlCache, ColumnMode, GlobalSqlOption, LoggerService, Mysql, Postgresql, PrinterLogger, SqlCache, Sqlite, SqliteRemote } from './sql.js';
 
 export const Boot = async function (options: GlobalSqlOption) {
     globalThis[_GlobalSqlOption] = Object.assign({}, _defOption);
@@ -47,6 +47,9 @@ export const Boot = async function (options: GlobalSqlOption) {
     }
     if (options.ctx) {
         globalThis[_Context] = options.ctx;
+    }
+    if (options.MysqlKeepAlive) {
+        globalThis[_MysqlKeepAliveTime] = options.MysqlKeepAlive;
     }
     if (options.Mysql) {
         const { createPool } = await import('mysql2/promise');

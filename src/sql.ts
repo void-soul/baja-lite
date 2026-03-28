@@ -61,6 +61,7 @@ const _sqliteRemoteName = Symbol('sqliteRemoteName');
 const _SqlOption = Symbol('SqlOption');
 export const _DataConvert = Symbol('DataConvert');
 export const _Context = Symbol('Context');
+export const _MysqlKeepAliveTime = Symbol('MysqlKeepAliveTime');
 const _resultMap = Symbol('resultMap');
 const _resultMap_SQLID = Symbol('resultMap_SQLID');
 export const _enum = Symbol('_enum');
@@ -369,6 +370,10 @@ export interface GlobalSqlOption extends GlobalSqlOptionForWeb {
       */
     Mysql?: Record<string, Record<string, any>> | Record<string, any>;
     /**
+     * MYSQL保持心跳的间隔，默认30秒
+     */
+    MysqlKeepAlive?: number;
+    /**
          初始化postgresql链接 支持多数据源
          ## 单一数据源: 直接传入postgresql的连接配置
          [Postgresql初始化文档](https://github.com/brianc/node-postgres/tree/master/packages/pg-pool)
@@ -578,8 +583,8 @@ export interface Connection {
     /** 多行多列 */
     query<Many_Row_Many_Column = any>(sync: SyncMode.Sync, sql?: string, params?: any): Many_Row_Many_Column[];
     query<Many_Row_Many_Column = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<Many_Row_Many_Column[]>;
-    realse(sync: SyncMode.Sync): void;
-    realse(sync: SyncMode.Async): Promise<void>;
+    release(sync: SyncMode.Sync): void;
+    release(sync: SyncMode.Async): Promise<void>;
 }
 interface Dao {
     [_daoDB]: any;
@@ -758,28 +763,39 @@ class MysqlConnection implements Connection {
         });
     }
 
-    realse(sync: SyncMode.Sync): void;
-    realse(sync: SyncMode.Async): Promise<void>;
-    realse(sync: SyncMode): Promise<void> | void {
-        if (sync === SyncMode.Sync) {
-            try {
-                this[_daoConnection]?.release();
-            } catch (error) {
-
-            }
-        };
+    release(sync: SyncMode.Sync): void;
+    release(sync: SyncMode.Async): Promise<void>;
+    release(sync: SyncMode): Promise<void> | void {
+        try {
+            this[_daoConnection]?.release();
+        } catch (error) {
+        }
+        if (sync === SyncMode.Async) {
+            return Promise.resolve();
+        }
     }
 }
 export class Mysql implements Dao {
     [_daoDB]: any;
     constructor(pool: any) {
         this[_daoDB] = pool;
+        this.keepAlive();
     }
 
     async keepAlive() {
-        const connection = await this[_daoDB].getConnection();
-        connection.query('SELECT 1 FROM DUAL');
-        setTimeout(async () => await this.keepAlive(), 60000);
+        let connection: Connection | null = null;
+        try {
+            connection = await this.createConnection(SyncMode.Async);
+            const data = await connection?.query(SyncMode.Async, 'SELECT 1 FROM DUAL');
+            (globalThis[_LoggerService]! as LoggerService).debug?.('keepAlive->', data?.[0]?.[1]);
+        } catch (error) {
+            (globalThis[_LoggerService]! as LoggerService).error('keepAlive error', error);
+        } finally {
+            if (connection) {
+                await connection.release(SyncMode.Async);
+            }
+            setTimeout(() => this.keepAlive(), globalThis[_MysqlKeepAliveTime] ?? 30000);
+        }
     }
 
     createConnection(sync: SyncMode.Sync): Connection | null;
@@ -1059,28 +1075,22 @@ class PostgresqlConnection implements Connection {
         });
     }
 
-    realse(sync: SyncMode.Sync): void;
-    realse(sync: SyncMode.Async): Promise<void>;
-    realse(sync: SyncMode): Promise<void> | void {
-        if (sync === SyncMode.Sync) {
-            try {
-                this[_daoConnection]?.release();
-            } catch (error) {
-
-            }
-        };
+    release(sync: SyncMode.Sync): void;
+    release(sync: SyncMode.Async): Promise<void>;
+    release(sync: SyncMode): Promise<void> | void {
+        try {
+            this[_daoConnection]?.release();
+        } catch (error) {
+        }
+        if (sync === SyncMode.Async) {
+            return Promise.resolve();
+        }
     }
 }
 export class Postgresql implements Dao {
     [_daoDB]: any;
     constructor(pool: any) {
         this[_daoDB] = pool;
-    }
-
-    async keepAlive() {
-        const connection = await this[_daoDB].connect();
-        connection.query('SELECT 1');
-        setTimeout(async () => await this.keepAlive(), 60000);
     }
 
     createConnection(sync: SyncMode.Sync): Connection | null;
@@ -1306,9 +1316,9 @@ class SqliteConnection implements Connection {
         }
     }
 
-    realse(sync: SyncMode.Sync): void;
-    realse(sync: SyncMode.Async): Promise<void>;
-    realse(sync: SyncMode): Promise<void> | void {
+    release(sync: SyncMode.Sync): void;
+    release(sync: SyncMode.Async): Promise<void>;
+    release(sync: SyncMode): Promise<void> | void {
     }
 }
 export class Sqlite implements Dao {
@@ -1562,9 +1572,9 @@ export class SqliteRemoteConnection implements Connection {
         });
     }
 
-    realse(sync: SyncMode.Sync): void;
-    realse(sync: SyncMode.Async): Promise<void>;
-    realse(sync: SyncMode): Promise<void> | void {
+    release(sync: SyncMode.Sync): void;
+    release(sync: SyncMode.Async): Promise<void>;
+    release(sync: SyncMode): Promise<void> | void {
     }
 }
 export class SqliteRemote implements Dao {
@@ -2156,27 +2166,27 @@ export class SqlCache {
             this.sqlFNMap = options.sqlFNMap;
         }
         if (options.sqlFNDir) {
-            const sqlFis = globalThis[_fs].readdirSync(options.sqlDir);
+            const sqlFis = globalThis[_fs].readdirSync(options.sqlFNDir);
             for (const modeName of sqlFis) {
                 const extname = globalThis[_path].extname(modeName);
                 const name = globalThis[_path].basename(modeName, extname);
-                const file = globalThis[_path].join(options.sqlDir, modeName);
-                if (extname === 'mu') {
+                const file = globalThis[_path].join(options.sqlFNDir, modeName);
+                if (extname === '.mu') {
                     this.sqlFNMap[name] = globalThis[_fs].readFileSync(file, { encoding: 'utf-8' }).toString();
                 }
             }
         }
         if (options.sqlMapperMap) {
-            globalThis[_resultMap] = options.sqlFNMap;
+            globalThis[_resultMap] = options.sqlMapperMap;
         }
         if (options.sqlMapperDir) {
-            const sqlFis = globalThis[_fs].readdirSync(options.sqlDir);
+            const sqlFis = globalThis[_fs].readdirSync(options.sqlMapperDir);
             globalThis[_resultMap] ??= {};
             for (const modeName of sqlFis) {
                 const extname = globalThis[_path].extname(modeName);
                 const name = globalThis[_path].basename(modeName, extname);
-                const file = globalThis[_path].join(options.sqlDir, modeName);
-                if (extname === 'json') {
+                const file = globalThis[_path].join(options.sqlMapperDir, modeName);
+                if (extname === '.json') {
                     globalThis[_resultMap][name] = JSON.parse(globalThis[_fs].readFileSync(file, { encoding: 'utf-8' }).toString());
                 }
             }
@@ -2284,7 +2294,7 @@ function P<T extends object>(skipConn = false) {
                 } finally {
                     if (needRealseConn && option && option!.conn) {
                         try {
-                            option!.conn!.realse(SyncMode.Sync);
+                            option!.conn!.release(SyncMode.Sync);
                         } catch (error) {
                         }
                     }
@@ -2318,7 +2328,7 @@ function P<T extends object>(skipConn = false) {
                     } finally {
                         if (needRealseConn && option && option!.conn) {
                             try {
-                                option!.conn!.realse(SyncMode.Sync);
+                                await option!.conn!.release(SyncMode.Async);
                             } catch (error) {
 
                             }
@@ -2345,7 +2355,7 @@ function P<T extends object>(skipConn = false) {
                     } finally {
                         if (needRealseConn && option && option!.conn) {
                             try {
-                                option!.conn!.realse(SyncMode.Sync);
+                                await option!.conn!.release(SyncMode.Async);
                             } catch (error) {
 
                             }
@@ -2371,7 +2381,7 @@ function P<T extends object>(skipConn = false) {
                     } finally {
                         if (needRealseConn && option && option!.conn) {
                             try {
-                                option!.conn!.realse(SyncMode.Sync);
+                                await option!.conn!.release(SyncMode.Async);
                             } catch (error) {
 
                             }

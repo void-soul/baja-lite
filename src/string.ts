@@ -2,6 +2,10 @@
  * 通过uri获取key
  * @param uri
  */
+/**
+ * 通过 URI 获取图片 Key
+ * @param uri 图片完整路径或包含 Key 的字符串
+ */
 export const getPicKey = (uri: string): string => {
   const arr = /key=([0-9a-zA-Z.]+)/.exec(uri);
   if (arr && arr.length === 2) {
@@ -10,24 +14,38 @@ export const getPicKey = (uri: string): string => {
   return uri;
 };
 
+/**
+ * 判断对象/字符串是否为空
+ * @param source 待判断的对象
+ * @param skipEmptyString 是否跳过仅包含空白字符的字符串，默认为 true
+ */
 export const emptyString = (source: any, skipEmptyString = true): boolean => {
   return (
     source === null ||
     source === undefined ||
-    (skipEmptyString === true && (source === '' || `${ source }`.replace(/\s/g, '') === ''))
+    (skipEmptyString === true && (source === '' || `${source}`.replace(/\s/g, '') === ''))
   );
 };
 
+/**
+ * 判断对象/字符串是否不为空
+ */
 export const notEmptyString = (source: any, skipEmptyString = true): boolean => {
   return emptyString(source, skipEmptyString) === false;
 };
 
+/**
+ * 安全字符串处理（移除单引号，防止简单 SQL 注入）
+ */
 export const safeString = (source?: string): string => {
   if (source) {
-    return `${ source }`.replace(/'/g, '');
+    return `${source}`.replace(/'/g, '');
   }
   return '';
 };
+/**
+ * 修剪对象中所有字符串属性的首尾空格
+ */
 export const trimObject = <T>(data: any): T => {
   if (data) {
     for (const k in data) {
@@ -39,11 +57,17 @@ export const trimObject = <T>(data: any): T => {
   return data;
 };
 
+/**
+ * 生成指定长度的随机数字字符串
+ */
 export const randomNumber = (len: number): string => {
-  return `${ parseInt(`${ (Math.random() * 9 + 1) * Math.pow(10, (len - 1)) }`, 10) }`;
+  return `${parseInt(`${(Math.random() * 9 + 1) * Math.pow(10, (len - 1))}`, 10)}`;
 };
 const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 const charLen = chars.length;
+/**
+ * 生成指定长度的随机字符串（包含大小写字母和数字）
+ */
 export const randomString = (len: number): string => {
   return Array.from(new Array(len)).map(() => chars.charAt(Math.floor(Math.random() * charLen))).join('');
 };
@@ -57,7 +81,7 @@ const charLen3 = chars3.length;
 export const randomString3 = (len: number): string => {
   return Array.from(new Array(len)).map(() => chars3.charAt(Math.floor(Math.random() * charLen3))).join('');
 };
-export const buildWxStr = (data: {[key: string]: string}, maxLabelLength: number, ...titles: string[]) => {
+export const buildWxStr = (data: { [key: string]: string }, maxLabelLength: number, ...titles: string[]) => {
   let str = titles.join('\r\n');
   str += '\r\n\r\n';
   const items = new Array<string>();
@@ -65,7 +89,7 @@ export const buildWxStr = (data: {[key: string]: string}, maxLabelLength: number
   for (const [key, value] of Object.entries(data)) {
     if (notEmptyString(value)) {
       const len = maxLabelLength - key.length;
-      items.push(`${ key }：${ ''.padEnd(len * 3 + (len > 0 ? 1 : 0), ' ') }${ value }`);
+      items.push(`${key}：${''.padEnd(len * 3 + (len > 0 ? 1 : 0), ' ')}${value}`);
     }
   }
   str += items.join('\r\n');
@@ -106,6 +130,9 @@ const table = {
   '～': '~',
   '﹏': '~'
 };
+/**
+ * 将字符串中的中文标点符号统一替换为对应的英文标点
+ */
 export const replaceChineseCode = (str: string) => {
   return str.replace(chinese, (a: string) => table[a] || '');
 };

@@ -69,6 +69,10 @@ function convertBase(str: string, fromBase: number, toBase: number): string | nu
     return out;
 }
 
+/**
+ * 雪花算法 ID 生成器
+ * 用于生成分布式唯一 ID
+ */
 export class Snowflake {
     private seq: number;
     private mid: number;
@@ -83,17 +87,25 @@ export class Snowflake {
         this.lastTime = 0;
     }
 
+    /**
+     * 生成下一个唯一 ID
+     * @returns 10 进制字符串形式的 ID，失败返回 null
+     */
     generate(): string | null {
-        let time = Date.now(),
-            bTime = (time - this.offset).toString(2);
+        let time = Date.now();
 
-        if (this.lastTime == time) {
+        // 基础保护：如果系统时间回拨，强制同步到最后一次生成时间以防止 ID 重复
+        if (time < this.lastTime) {
+            time = this.lastTime;
+        }
+
+        if (this.lastTime === time) {
             this.seq++;
 
             if (this.seq > 4095) {
                 this.seq = 0;
-
-                while (Date.now() <= time) { }
+                // 方案2：不再忙等待，直接预支进入下一毫秒
+                time++;
             }
         } else {
             this.seq = 0;
@@ -101,7 +113,8 @@ export class Snowflake {
 
         this.lastTime = time;
 
-        let bSeq = this.seq.toString(2),
+        let bTime = (time - this.offset).toString(2),
+            bSeq = this.seq.toString(2),
             bMid = this.mid.toString(2);
 
         while (bSeq.length < 12) {
