@@ -136,3 +136,22 @@ const table = {
 export const replaceChineseCode = (str: string) => {
   return str.replace(chinese, (a: string) => table[a] || '');
 };
+/** 更安全的sql 参数占位符替换 */
+export function replacePlaceholders(sql: string): string {
+  let index = 1;
+  let inString = false;
+  let result = '';
+
+  for (let i = 0; i < sql.length; i++) {
+    const char = sql[i];
+    if (char === "'" && sql[i - 1] !== '\\') {
+      inString = !inString;
+    }
+    if (char === '?' && !inString) {
+      result += `$${index++}`;
+    } else {
+      result += char;
+    }
+  }
+  return result;
+}

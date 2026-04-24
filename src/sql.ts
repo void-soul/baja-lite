@@ -12,7 +12,7 @@ import { excuteSplit, ExcuteSplitMode, sleep } from './fn.js';
 import { add, calc, ten2Any } from './math.js';
 import { C2P, C2P2, P2C } from './object.js';
 import { snowflake } from './snowflake.js';
-import { emptyString } from './string.js';
+import { emptyString, replacePlaceholders } from './string.js';
 
 const iterate = ite.iterate;
 (BigInt.prototype as any).toJSON = function () { return this.toString() }
@@ -614,7 +614,7 @@ class MysqlConnection implements Connection {
         (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return { affectedRows: 0, insertId: 0n }; };
         if (sync === SyncMode.Sync) {
-            (globalThis[_LoggerService]! as LoggerService).warn('MYSQL not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('MYSQL not supported sync mode');
             return { affectedRows: 0, insertId: 0n };
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
@@ -645,7 +645,7 @@ class MysqlConnection implements Connection {
         (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return null };
         if (sync === SyncMode.Sync) {
-            (globalThis[_LoggerService]! as LoggerService).warn('MYSQL not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('MYSQL not supported sync mode');
             return null;
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
@@ -656,10 +656,10 @@ class MysqlConnection implements Connection {
                 const [result] = await this[_daoConnection].query(sql, params);
                 if (result && result[0]) {
                     const r = Object.values(result[0])[0];
-                    if (r === null) resolve(r);
-                    else resolve(r as T);
+                    resolve(r === null ? null : r as T);
+                } else {
+                    resolve(null);
                 }
-                resolve(null);
             } catch (error) {
                 (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
@@ -677,7 +677,7 @@ class MysqlConnection implements Connection {
         (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return null };
         if (sync === SyncMode.Sync) {
-            (globalThis[_LoggerService]! as LoggerService).warn('MYSQL not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('MYSQL not supported sync mode');
             return null;
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
@@ -708,7 +708,7 @@ class MysqlConnection implements Connection {
         (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return []; };
         if (sync === SyncMode.Sync) {
-            (globalThis[_LoggerService]! as LoggerService).warn('MYSQL not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('MYSQL not supported sync mode');
             return [];
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
@@ -739,7 +739,7 @@ class MysqlConnection implements Connection {
         (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return []; };
         if (sync === SyncMode.Sync) {
-            (globalThis[_LoggerService]! as LoggerService).warn('MYSQL not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('MYSQL not supported sync mode');
             return [];
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
@@ -777,24 +777,31 @@ class MysqlConnection implements Connection {
 }
 export class Mysql implements Dao {
     [_daoDB]: any;
+    private keepAliveTimer?: NodeJS.Timeout;
+    private isClosing = false;
     constructor(pool: any) {
         this[_daoDB] = pool;
         this.keepAlive();
     }
 
     async keepAlive() {
+        if (this.isClosing) return;
         let connection: Connection | null = null;
         try {
             connection = await this.createConnection(SyncMode.Async);
-            const data = await connection?.query(SyncMode.Async, 'SELECT 1 FROM DUAL');
-            (globalThis[_LoggerService]! as LoggerService).debug?.('keepAlive->', data?.[0]?.[1]);
+            if (connection) {
+                const data = await connection.query(SyncMode.Async, 'SELECT 1 FROM DUAL');
+                (globalThis[_LoggerService]! as LoggerService).debug?.('keepAlive->', data?.[0]?.[1]);
+            }
         } catch (error) {
             (globalThis[_LoggerService]! as LoggerService).error('keepAlive error', error);
         } finally {
             if (connection) {
                 await connection.release(SyncMode.Async);
             }
-            setTimeout(() => this.keepAlive(), globalThis[_MysqlKeepAliveTime] ?? 30000);
+            if (!this.isClosing) {
+                this.keepAliveTimer = setTimeout(() => this.keepAlive(), globalThis[_MysqlKeepAliveTime] ?? 30000);
+            }
         }
     }
 
@@ -802,7 +809,7 @@ export class Mysql implements Dao {
     createConnection(sync: SyncMode.Async): Promise<Connection | null>;
     createConnection(sync: SyncMode): Connection | null | Promise<Connection | null> {
         if (sync === SyncMode.Sync) {
-            (globalThis[_LoggerService]! as LoggerService).error('MYSQL not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).error('MYSQL not supported sync mode');
             return null;
         };
         return new Promise<Connection>(async (resolve, reject) => {
@@ -820,7 +827,7 @@ export class Mysql implements Dao {
     transaction<T = any>(sync: SyncMode.Async, fn: (conn: Connection) => Promise<T>, conn?: Connection | null): Promise<T | null>;
     transaction<T = any>(sync: SyncMode, fn: (conn: Connection) => T | Promise<T>, conn?: Connection | null): T | null | Promise<T | null> {
         if (sync === SyncMode.Sync) {
-            (globalThis[_LoggerService]! as LoggerService).warn('MYSQL not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('MYSQL not supported sync mode');
             return null;
         };
         return new Promise<T>(async (resolve, reject) => {
@@ -842,15 +849,15 @@ export class Mysql implements Dao {
                 if (needCommit) {
                     (globalThis[_LoggerService]! as LoggerService).debug?.('commit begin!');
                     await conn![_daoConnection].commit();
-                    conn![_inTransaction] = false;
                     (globalThis[_LoggerService]! as LoggerService).debug?.('commit end!');
                 }
                 resolve(result);
             } catch (error) {
-                (globalThis[_LoggerService]! as LoggerService).debug?.('rollback begin!');
-                await conn![_daoConnection].rollback();
-                (globalThis[_LoggerService]! as LoggerService).debug?.('rollback end!');
-                conn![_inTransaction] = false;
+                if (needCommit) {
+                    (globalThis[_LoggerService]! as LoggerService).debug?.('rollback begin!');
+                    await conn![_daoConnection].rollback();
+                    (globalThis[_LoggerService]! as LoggerService).debug?.('rollback end!');
+                }
                 (globalThis[_LoggerService]! as LoggerService).error(error);
                 reject(error);
             } finally {
@@ -864,6 +871,8 @@ export class Mysql implements Dao {
                         (globalThis[_LoggerService]! as LoggerService).debug?.('release end!');
                     }
                 } catch (error) {
+                    // 释放连接失败通常不影响业务逻辑，记录日志即可
+                    (globalThis[_LoggerService]! as LoggerService).warn?.('Failed to release connection in finally block', error);
                 }
             }
         });
@@ -872,9 +881,11 @@ export class Mysql implements Dao {
     close(sync: SyncMode.Sync): void;
     close(sync: SyncMode.Async): Promise<void>;
     close(sync: SyncMode): Promise<void> | void {
-        if (sync === SyncMode.Sync) {
-            this[_daoDB]?.destroy();
-        };
+        this.isClosing = true;
+        if (this.keepAliveTimer) {
+            clearTimeout(this.keepAliveTimer);
+        }
+        return this[_daoDB]?.destroy();
     }
 
     backup(sync: SyncMode.Sync, name: string): void;
@@ -906,7 +917,7 @@ class PostgresqlConnection implements Connection {
         (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return { affectedRows: 0, insertId: 0n }; };
         if (sync === SyncMode.Sync) {
-            (globalThis[_LoggerService]! as LoggerService).warn('Postgresql not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('Postgresql not supported sync mode');
             return { affectedRows: 0, insertId: 0n };
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
@@ -914,16 +925,15 @@ class PostgresqlConnection implements Connection {
         }
         return new Promise<{ affectedRows: number; insertId: bigint; }>(async (resolve, reject) => {
             try {
-                let index = 1;
                 const { rowCount } = await this[_daoConnection].query({
-                    text: sql.replace(/\?/g, () => `$${index++}`),
+                    text: replacePlaceholders(sql),
                     values: params
                 });
                 const result = rowCount as any;
                 if (globalThis[_GlobalSqlOption].log === 'trace') {
                     (globalThis[_LoggerService]! as LoggerService).verbose?.(result);
                 }
-                resolve({ affectedRows: result.affectedRows, insertId: result.insertId });
+                resolve({ affectedRows: rowCount || 0, insertId: 0n });
             } catch (error) {
                 (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
@@ -941,7 +951,7 @@ class PostgresqlConnection implements Connection {
         (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return null };
         if (sync === SyncMode.Sync) {
-            (globalThis[_LoggerService]! as LoggerService).warn('Postgresql not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('Postgresql not supported sync mode');
             return null;
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
@@ -949,9 +959,8 @@ class PostgresqlConnection implements Connection {
         }
         return new Promise<T | null>(async (resolve, reject) => {
             try {
-                let index = 1;
                 const { rows } = await this[_daoConnection].query({
-                    text: sql.replace(/\?/g, () => `$${index++}`),
+                    text: replacePlaceholders(sql),
                     values: params
                 });
                 if (rows && rows[0]) {
@@ -977,7 +986,7 @@ class PostgresqlConnection implements Connection {
         (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return null };
         if (sync === SyncMode.Sync) {
-            (globalThis[_LoggerService]! as LoggerService).warn('Postgresql not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('Postgresql not supported sync mode');
             return null;
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
@@ -985,9 +994,8 @@ class PostgresqlConnection implements Connection {
         }
         return new Promise<T | null>(async (resolve, reject) => {
             try {
-                let index = 1;
                 const { rows } = await this[_daoConnection].query({
-                    text: sql.replace(/\?/g, () => `$${index++}`),
+                    text: replacePlaceholders(sql),
                     values: params
                 });
                 if (globalThis[_GlobalSqlOption].log === 'trace') {
@@ -1012,7 +1020,7 @@ class PostgresqlConnection implements Connection {
         (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return []; };
         if (sync === SyncMode.Sync) {
-            (globalThis[_LoggerService]! as LoggerService).warn('Postgresql not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('Postgresql not supported sync mode');
             return [];
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
@@ -1020,9 +1028,8 @@ class PostgresqlConnection implements Connection {
         }
         return new Promise<T[]>(async (resolve, reject) => {
             try {
-                let index = 1;
                 const { rows } = await this[_daoConnection].query({
-                    text: sql.replace(/\?/g, () => `$${index++}`),
+                    text: replacePlaceholders(sql),
                     values: params
                 });
                 if (globalThis[_GlobalSqlOption].log === 'trace') {
@@ -1047,7 +1054,7 @@ class PostgresqlConnection implements Connection {
         (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return []; };
         if (sync === SyncMode.Sync) {
-            (globalThis[_LoggerService]! as LoggerService).warn('Postgresql not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('Postgresql not supported sync mode');
             return [];
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
@@ -1055,9 +1062,8 @@ class PostgresqlConnection implements Connection {
         }
         return new Promise<T[]>(async (resolve, reject) => {
             try {
-                let index = 1;
                 const { rows } = await this[_daoConnection].query({
-                    text: sql.replace(/\?/g, () => `$${index++}`),
+                    text: replacePlaceholders(sql),
                     values: params
                 });
                 if (globalThis[_GlobalSqlOption].log === 'trace') {
@@ -1089,15 +1095,37 @@ class PostgresqlConnection implements Connection {
 }
 export class Postgresql implements Dao {
     [_daoDB]: any;
+    private keepAliveTimer?: NodeJS.Timeout;
+    private isClosing = false;
     constructor(pool: any) {
         this[_daoDB] = pool;
+        this.keepAlive();
     }
-
+    async keepAlive() {
+        if (this.isClosing) return;
+        let connection: Connection | null = null;
+        try {
+            connection = await this.createConnection(SyncMode.Async);
+            if (connection) {
+                const data = await connection.query(SyncMode.Async, 'SELECT 1 FROM DUAL');
+                (globalThis[_LoggerService]! as LoggerService).debug?.('keepAlive->', data?.[0]?.[1]);
+            }
+        } catch (error) {
+            (globalThis[_LoggerService]! as LoggerService).error('keepAlive error', error);
+        } finally {
+            if (connection) {
+                await connection.release(SyncMode.Async);
+            }
+            if (!this.isClosing) {
+                this.keepAliveTimer = setTimeout(() => this.keepAlive(), globalThis[_MysqlKeepAliveTime] ?? 30000);
+            }
+        }
+    }
     createConnection(sync: SyncMode.Sync): Connection | null;
     createConnection(sync: SyncMode.Async): Promise<Connection | null>;
     createConnection(sync: SyncMode): Connection | null | Promise<Connection | null> {
         if (sync === SyncMode.Sync) {
-            (globalThis[_LoggerService]! as LoggerService).error('Postgresql not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).error('Postgresql not supported sync mode');
             return null;
         };
         return new Promise<Connection>(async (resolve, reject) => {
@@ -1115,7 +1143,7 @@ export class Postgresql implements Dao {
     transaction<T = any>(sync: SyncMode.Async, fn: (conn: Connection) => Promise<T>, conn?: Connection | null): Promise<T | null>;
     transaction<T = any>(sync: SyncMode, fn: (conn: Connection) => T | Promise<T>, conn?: Connection | null): T | null | Promise<T | null> {
         if (sync === SyncMode.Sync) {
-            (globalThis[_LoggerService]! as LoggerService).warn('Postgresql not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('Postgresql not supported sync mode');
             return null;
         };
         return new Promise<T>(async (resolve, reject) => {
@@ -1137,15 +1165,15 @@ export class Postgresql implements Dao {
                 if (needCommit) {
                     (globalThis[_LoggerService]! as LoggerService).debug?.('commit begin!');
                     await conn![_daoConnection].query('COMMIT');
-                    conn![_inTransaction] = false;
                     (globalThis[_LoggerService]! as LoggerService).debug?.('commit end!');
                 }
                 resolve(result);
             } catch (error) {
-                (globalThis[_LoggerService]! as LoggerService).debug?.('rollback begin!');
-                await conn![_daoConnection].query('ROLLBACK');
-                (globalThis[_LoggerService]! as LoggerService).debug?.('rollback end!');
-                conn![_inTransaction] = false;
+                if (needCommit) {
+                    (globalThis[_LoggerService]! as LoggerService).debug?.('rollback begin!');
+                    await conn![_daoConnection].query('ROLLBACK');
+                    (globalThis[_LoggerService]! as LoggerService).debug?.('rollback end!');
+                }
                 (globalThis[_LoggerService]! as LoggerService).error(error);
                 reject(error);
             } finally {
@@ -1159,6 +1187,8 @@ export class Postgresql implements Dao {
                         (globalThis[_LoggerService]! as LoggerService).debug?.('release end!');
                     }
                 } catch (error) {
+                    // 释放连接失败通常不影响业务逻辑，记录日志即可
+                    (globalThis[_LoggerService]! as LoggerService).warn?.('Failed to release connection in finally block', error);
                 }
             }
         });
@@ -1167,9 +1197,11 @@ export class Postgresql implements Dao {
     close(sync: SyncMode.Sync): void;
     close(sync: SyncMode.Async): Promise<void>;
     close(sync: SyncMode): Promise<void> | void {
-        if (sync === SyncMode.Sync) {
-            this[_daoDB]?.end();
-        };
+        this.isClosing = true;
+        if (this.keepAliveTimer) {
+            clearTimeout(this.keepAliveTimer);
+        }
+        this[_daoDB]?.end();
     }
 
     backup(sync: SyncMode.Sync, name: string): void;
@@ -1201,7 +1233,7 @@ class SqliteConnection implements Connection {
             (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
             if (!sql) { return { affectedRows: 0, insertId: 0n }; };
             if (sync === SyncMode.Async) {
-                (globalThis[_LoggerService]! as LoggerService).warn(`SQLITE not suppoted async mode`);
+                (globalThis[_LoggerService]! as LoggerService).warn(`SQLITE not supported async mode`);
                 return { affectedRows: 0, insertId: 0n };
             };
             if (globalThis[_GlobalSqlOption].log === 'trace') {
@@ -1230,7 +1262,7 @@ class SqliteConnection implements Connection {
             (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
             if (!sql) { return null };
             if (sync === SyncMode.Async) {
-                (globalThis[_LoggerService]! as LoggerService).warn(`SQLITE not suppoted async mode`);
+                (globalThis[_LoggerService]! as LoggerService).warn(`SQLITE not supported async mode`);
                 return null;
             };
             if (globalThis[_GlobalSqlOption].log === 'trace') {
@@ -1275,7 +1307,7 @@ class SqliteConnection implements Connection {
             (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
             if (!sql) { return []; };
             if (sync === SyncMode.Async) {
-                (globalThis[_LoggerService]! as LoggerService).warn(`SQLITE not suppoted async mode`);
+                (globalThis[_LoggerService]! as LoggerService).warn(`SQLITE not supported async mode`);
                 return [];
             };
             if (globalThis[_GlobalSqlOption].log === 'trace') {
@@ -1299,7 +1331,7 @@ class SqliteConnection implements Connection {
             (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
             if (!sql) { return []; };
             if (sync === SyncMode.Async) {
-                (globalThis[_LoggerService]! as LoggerService).warn(`SQLITE not suppoted async mode`);
+                (globalThis[_LoggerService]! as LoggerService).warn(`SQLITE not supported async mode`);
                 return [];
             };
             if (globalThis[_GlobalSqlOption].log === 'trace') {
@@ -1338,7 +1370,13 @@ export class Sqlite implements Dao {
         `);
         this[_daoDB].function('UUID_SHORT', { deterministic: false }, () => snowflake.generate());
         this[_daoDB].function('UUID', { deterministic: false }, () => snowflake.generate());
-        this[_daoDB].function('TIME_TO_SEC', { deterministic: true }, (time: string) => time.split(':').map((v, i) => parseInt(v) * (i === 0 ? 360 : i === 1 ? 60 : 0)).reduce((a, b) => a + b, 0));
+        this[_daoDB].function('TIME_TO_SEC', { deterministic: true }, (time: string) => {
+            const parts = time.split(':');
+            const hours = parseInt(parts[0] || '0');
+            const minutes = parseInt(parts[1] || '0');
+            const seconds = parseInt(parts[2] || '0');
+            return hours * 3600 + minutes * 60 + seconds;
+        });
         this[_daoDB].function('IF', { deterministic: true }, (condition: any, v1: any, v2: any) => condition ? v1 : v2);
         this[_daoDB].function('RIGHT', { deterministic: true }, (src: string, p: number) => src.slice(p * -1));
         this[_daoDB].function('LEFT', { deterministic: true }, (str: string, len: number) => str?.substring(0, len) || null);
@@ -1366,7 +1404,7 @@ export class Sqlite implements Dao {
     createConnection(sync: SyncMode.Async): Promise<Connection | null>;
     createConnection(sync: SyncMode): Connection | null | Promise<Connection | null> {
         if (sync === SyncMode.Async) {
-            (globalThis[_LoggerService]! as LoggerService).error(`SQLITE not suppoted async mode`);
+            (globalThis[_LoggerService]! as LoggerService).error(`SQLITE not supported async mode`);
             return null;
         };
         return new SqliteConnection(this[_daoDB]);
@@ -1376,7 +1414,7 @@ export class Sqlite implements Dao {
     transaction<T = any>(sync: SyncMode.Async, fn: (conn: Connection) => Promise<T>, conn?: Connection | null): Promise<T | null>;
     transaction<T = any>(sync: SyncMode, fn: (conn: Connection) => T | Promise<T>, conn?: Connection | null): T | null | Promise<T | null> {
         if (sync === SyncMode.Async) {
-            (globalThis[_LoggerService]! as LoggerService).warn(`SQLITE not suppoted async mode`);
+            (globalThis[_LoggerService]! as LoggerService).warn(`SQLITE not supported async mode`);
             return null;
         };
         if (!conn) {
@@ -1438,7 +1476,7 @@ export class SqliteRemoteConnection implements Connection {
         (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return { affectedRows: 0, insertId: 0n }; };
         if (sync === SyncMode.Sync) {
-            (globalThis[_LoggerService]! as LoggerService).warn('SqliteRemote not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('SqliteRemote not supported sync mode');
             return { affectedRows: 0, insertId: 0n };
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
@@ -1466,7 +1504,7 @@ export class SqliteRemoteConnection implements Connection {
         (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return null };
         if (sync === SyncMode.Sync) {
-            (globalThis[_LoggerService]! as LoggerService).warn('SqliteRemote not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('SqliteRemote not supported sync mode');
             return null;
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
@@ -1494,7 +1532,7 @@ export class SqliteRemoteConnection implements Connection {
         (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return null };
         if (sync === SyncMode.Sync) {
-            (globalThis[_LoggerService]! as LoggerService).warn('SqliteRemote not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('SqliteRemote not supported sync mode');
             return null;
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
@@ -1522,7 +1560,7 @@ export class SqliteRemoteConnection implements Connection {
         (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return []; };
         if (sync === SyncMode.Sync) {
-            (globalThis[_LoggerService]! as LoggerService).warn('SqliteRemote not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('SqliteRemote not supported sync mode');
             return [];
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
@@ -1550,7 +1588,7 @@ export class SqliteRemoteConnection implements Connection {
         (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
         if (!sql) { return []; };
         if (sync === SyncMode.Sync) {
-            (globalThis[_LoggerService]! as LoggerService).warn('SqliteRemote not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).warn('SqliteRemote not supported sync mode');
             return [];
         };
         if (globalThis[_GlobalSqlOption].log === 'trace') {
@@ -1592,7 +1630,7 @@ export class SqliteRemote implements Dao {
     createConnection(sync: SyncMode.Async): Promise<Connection | null>;
     createConnection(sync: SyncMode): Connection | null | Promise<Connection | null> {
         if (sync === SyncMode.Sync) {
-            (globalThis[_LoggerService]! as LoggerService).error('SQLITEREMOTE not suppouted sync mode');
+            (globalThis[_LoggerService]! as LoggerService).error('SQLITEREMOTE not supported sync mode');
             return null;
         };
         return new Promise<Connection>(async (resolve, reject) => {
@@ -1610,7 +1648,7 @@ export class SqliteRemote implements Dao {
     transaction<T = any>(sync: SyncMode.Sync, fn: (conn: Connection) => T, conn?: Connection | null): T | null;
     transaction<T = any>(sync: SyncMode.Async, fn: (conn: Connection) => Promise<T>, conn?: Connection | null): Promise<T | null>;
     transaction<T = any>(sync: SyncMode, fn: (conn: Connection) => T | Promise<T>, conn?: Connection | null): T | null | Promise<T | null> {
-        (globalThis[_LoggerService]! as LoggerService).warn(`SQLITEREMOTE not suppoted transaction`);
+        (globalThis[_LoggerService]! as LoggerService).warn(`SQLITEREMOTE not supported transaction`);
         return null;
     }
 
