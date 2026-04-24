@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
+import axios from 'axios';
 import pino from 'pino';
-import * as rp from 'request-promise';
 import { Throw } from '../error.js';
 const logger =
   process.env['NODE_ENV'] !== 'production' ? pino({
@@ -45,33 +45,30 @@ export abstract class BaseWx {
     if (!needToken || token) {
       const start = +new Date();
       let url = uri(token);
-      const param = method === 'get' ? {
+      const config: import('axios').AxiosRequestConfig = {
         method,
-        json: buffer ? false : true,
-        qs: data,
-        encoding: buffer ? null : undefined
-      } : {
-        json: data,
-        method,
-        encoding: buffer ? null : undefined
+        url,
+        responseType: buffer ? 'arraybuffer' : 'json',
       };
+      if (method === 'get') {
+        config.params = data;
+      } else {
+        config.data = data;
+      }
 
-      let response = await rp.default({
-        uri: url,
-        ...param
-      });
-      if (this.authErrorCodes.includes(response.errcode)) {
+      let response = await axios(config);
+      let result = buffer ? response.data : response.data;
+      if (this.authErrorCodes.includes(result.errcode)) {
         token = await this.getToken(true);
         url = uri(token);
-        response = await rp.default({
-          uri: url,
-          ...param
-        });
-        Throw.if(response.errcode && response.errcode - 0 !== 0, `${url}-${response.errcode}-${response.errmsg}`);
+        config.url = url;
+        response = await axios(config);
+        result = buffer ? response.data : response.data;
+        Throw.if(result.errcode && result.errcode - 0 !== 0, `${url}-${result.errcode}-${result.errmsg}`);
       }
-      Throw.if(response.errcode && response.errcode - 0 !== 0, `${url}-${response.errcode}-${response.errmsg}`);
+      Throw.if(result.errcode && result.errcode - 0 !== 0, `${url}-${result.errcode}-${result.errmsg}`);
       logger.info(`fetch data ${+new Date() - start} ms`);
-      return response;
+      return result;
     }
   }
 }
