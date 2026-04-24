@@ -7,7 +7,7 @@ import pino, { Logger } from 'pino';
 import { formatDialect, mysql, postgresql, sqlite } from 'sql-formatter';
 import tslib from 'tslib';
 import { convert, XML } from './convert-xml.js';
-import { Throw } from './error.js';
+import { DatabaseError, Throw } from './error.js';
 import { excuteSplit, ExcuteSplitMode, sleep } from './fn.js';
 import { add, calc, ten2Any } from './math.js';
 import { C2P, C2P2, P2C } from './object.js';
@@ -70,6 +70,10 @@ export const _EventBus = Symbol('EventBus');
 export const _LoggerService = Symbol('LoggerService');
 export const _path = Symbol('path');
 export const _fs = Symbol('fs');
+
+// 常量定义
+const DEFAULT_KEEPALIVE_INTERVAL = 30000; // 30 秒
+const DEFAULT_MAX_DEAL = 500; // 默认批量处理数量
 // export const logger = pino({
 //     name: 'sql',
 //     transport: {
@@ -201,7 +205,7 @@ interface MethodOption {
     conn?: Connection | null;
 }
 export const _defOption = {
-    maxDeal: 500,
+    maxDeal: DEFAULT_MAX_DEAL,
     skipUndefined: true,
     skipNull: true,
     skipEmptyString: true
@@ -629,12 +633,9 @@ class MysqlConnection implements Connection {
                 }
                 resolve({ affectedRows: result.affectedRows, insertId: result.insertId });
             } catch (error) {
-                (globalThis[_LoggerService]! as LoggerService).error(`
-                    error: ${error},
-                    sql: ${sql},
-                    params: ${params}
-                `);
-                reject(error);
+                const dbError = DatabaseError.query('MySQL execute failed', sql, params, error as Error);
+                (globalThis[_LoggerService]! as LoggerService).error(dbError.getSafeMessage(), { cause: error });
+                reject(dbError);
             }
         });
     }
@@ -800,7 +801,7 @@ export class Mysql implements Dao {
                 await connection.release(SyncMode.Async);
             }
             if (!this.isClosing) {
-                this.keepAliveTimer = setTimeout(() => this.keepAlive(), globalThis[_MysqlKeepAliveTime] ?? 30000);
+                this.keepAliveTimer = setTimeout(() => this.keepAlive(), globalThis[_MysqlKeepAliveTime] ?? DEFAULT_KEEPALIVE_INTERVAL);
             }
         }
     }
@@ -818,7 +819,9 @@ export class Mysql implements Dao {
                 (globalThis[_LoggerService]! as LoggerService).debug?.('create new connection!');
                 resolve(new MysqlConnection(connection));
             } catch (error) {
-                reject(error);
+                const dbError = DatabaseError.connection('Failed to create MySQL connection', error as Error);
+                (globalThis[_LoggerService]! as LoggerService).error(dbError.getSafeMessage(), { cause: error });
+                reject(dbError);
             }
         });
     }
@@ -858,8 +861,9 @@ export class Mysql implements Dao {
                     await conn![_daoConnection].rollback();
                     (globalThis[_LoggerService]! as LoggerService).debug?.('rollback end!');
                 }
-                (globalThis[_LoggerService]! as LoggerService).error(error);
-                reject(error);
+                const dbError = error instanceof DatabaseError ? error : DatabaseError.transaction('MySQL transaction failed', error as Error);
+                (globalThis[_LoggerService]! as LoggerService).error(dbError.getSafeMessage(), { cause: error });
+                reject(dbError);
             } finally {
                 try {
                     if (needCommit) {
@@ -1117,7 +1121,7 @@ export class Postgresql implements Dao {
                 await connection.release(SyncMode.Async);
             }
             if (!this.isClosing) {
-                this.keepAliveTimer = setTimeout(() => this.keepAlive(), globalThis[_MysqlKeepAliveTime] ?? 30000);
+                this.keepAliveTimer = setTimeout(() => this.keepAlive(), globalThis[_MysqlKeepAliveTime] ?? DEFAULT_KEEPALIVE_INTERVAL);
             }
         }
     }
@@ -1174,8 +1178,9 @@ export class Postgresql implements Dao {
                     await conn![_daoConnection].query('ROLLBACK');
                     (globalThis[_LoggerService]! as LoggerService).debug?.('rollback end!');
                 }
-                (globalThis[_LoggerService]! as LoggerService).error(error);
-                reject(error);
+                const dbError = error instanceof DatabaseError ? error : DatabaseError.transaction('PostgreSQL transaction failed', error as Error);
+                (globalThis[_LoggerService]! as LoggerService).error(dbError.getSafeMessage(), { cause: error });
+                reject(dbError);
             } finally {
                 try {
                     if (needCommit) {
