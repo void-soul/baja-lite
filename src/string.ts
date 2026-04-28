@@ -35,7 +35,10 @@ export const notEmptyString = (source: any, skipEmptyString = true): boolean => 
 };
 
 /**
- * 安全字符串处理（移除单引号，防止简单 SQL 注入）
+ * 安全字符串处理（移除单引号）
+ * @deprecated 不推荐用于 SQL 注入防护，请使用参数化查询
+ * @param source 源字符串
+ * @returns 移除单引号后的字符串
  */
 export const safeString = (source?: string): string => {
   if (source) {

@@ -77,8 +77,8 @@ export const div = (...args: any[]): number => {
 export const divDef = (def: any, ...args: any[]): number => {
   const arr: Decimal[] = filterNumber2(args);
   if (arr!.length > 1) {
-    const zeros = arr!.slice(1).findIndex(i => i.equals(ZERO));
-    if (zeros > -1) {
+    const hasZeroDivisor = arr!.slice(1).some(i => i.equals(ZERO));
+    if (hasZeroDivisor) {
       return new Decimal(def).toNumber();
     }
     return arr!.reduce((a, b) => a.div(b)).toNumber();

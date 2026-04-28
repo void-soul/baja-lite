@@ -10,9 +10,6 @@ export const Boot = async function (options: GlobalSqlOption) {
     if (options.skipNull !== undefined) {
         globalThis[_GlobalSqlOption].skipNull = options.skipNull;
     }
-    if (options.skipEmptyString !== undefined) {
-        globalThis[_GlobalSqlOption].skipEmptyString = options.skipEmptyString;
-    }
     if (options.maxDeal !== undefined) {
         globalThis[_GlobalSqlOption].maxDeal = options.maxDeal;
     }

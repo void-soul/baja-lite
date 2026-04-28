@@ -94,9 +94,19 @@ export class Snowflake {
     generate(): string | null {
         let time = Date.now();
 
-        // 基础保护：如果系统时间回拨，强制同步到最后一次生成时间以防止 ID 重复
+        // 时钟回拨处理
         if (time < this.lastTime) {
-            time = this.lastTime;
+            const offset = this.lastTime - time;
+            // 如果回拨超过 5 秒，拒绝生成 ID
+            if (offset > 5000) {
+                console.error(`Clock moved backwards by ${offset}ms. Refusing to generate id`);
+                return null;
+            }
+            // 小幅回拨，等待追上上次时间
+            while (Date.now() <= this.lastTime) {
+                // 忙等待
+            }
+            time = Date.now();
         }
 
         if (this.lastTime === time) {
@@ -104,7 +114,7 @@ export class Snowflake {
 
             if (this.seq > 4095) {
                 this.seq = 0;
-                // 方案2：不再忙等待，直接预支进入下一毫秒
+                // 序列号溢出，进入下一毫秒
                 time++;
             }
         } else {
