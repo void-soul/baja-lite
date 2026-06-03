@@ -2332,7 +2332,11 @@ function P<T extends object>(skipConn = false) {
                     (globalThis[_LoggerService]! as LoggerService).log(`${propertyKey}:${(option as any).sqlId ?? option!.tableName}:use ${+new Date() - startTime}ms`);
                     return result;
                 } catch (error) {
-                    console.error(`${(option as any).sqlId ?? option.tableName} service ${propertyKey} have an error:${error}, it's argumens: ${JSON.stringify(args.filter(i => typeof i !== 'object' || (typeof i === 'object' && !i.insert)))}`);
+                    let args = '';
+                    if (args.length > 0 && (args[0] as any).params) {
+                        args = JSON.stringify((args[0] as any).params);
+                    }
+                    console.error(`${(option as any).sqlId ?? option.tableName} service ${propertyKey} have an error:${error}, it's argumens: ${args}`);
                     throw error;
                 } finally {
                     if (needRealseConn && option && option!.conn) {
@@ -2366,7 +2370,11 @@ function P<T extends object>(skipConn = false) {
                         (globalThis[_LoggerService]! as LoggerService).log(`${propertyKey}:${(option as any).sqlId ?? option!.tableName}:use ${+new Date() - startTime}ms`);
                         resolve(result);
                     } catch (error) {
-                        console.error(`${(option as any).sqlId ?? option!.tableName} service ${propertyKey} have an error:${error}, it's argumens: ${JSON.stringify(args.filter(i => typeof i !== 'object' || (typeof i === 'object' && !i.insert)))}`)
+                        let args = '';
+                        if (args.length > 0 && (args[0] as any).params) {
+                            args = JSON.stringify((args[0] as any).params);
+                        }
+                        console.error(`${(option as any).sqlId ?? option.tableName} service ${propertyKey} have an error:${error}, it's argumens: ${args}`);
                         reject(error);
                     } finally {
                         if (needRealseConn && option && option!.conn) {
@@ -2393,7 +2401,11 @@ function P<T extends object>(skipConn = false) {
                         (globalThis[_LoggerService]! as LoggerService).log(`${propertyKey}:${(option as any).sqlId ?? option!.tableName}:use ${+new Date() - startTime}ms`);
                         resolve(result);
                     } catch (error) {
-                        console.error(`${(option as any).sqlId ?? option!.tableName} service ${propertyKey} have an error:${error}, it's argumens: ${JSON.stringify(args.filter(i => typeof i !== 'object' || (typeof i === 'object' && !i.insert)))}`)
+                        let args = '';
+                        if (args.length > 0 && (args[0] as any).params) {
+                            args = JSON.stringify((args[0] as any).params);
+                        }
+                        console.error(`${(option as any).sqlId ?? option.tableName} service ${propertyKey} have an error:${error}, it's argumens: ${args}`);
                         reject(error);
                     } finally {
                         if (needRealseConn && option && option!.conn) {
@@ -2419,7 +2431,11 @@ function P<T extends object>(skipConn = false) {
                         (globalThis[_LoggerService]! as LoggerService).log(`${propertyKey}:${(option as any).sqlId ?? option!.tableName}:use ${+new Date() - startTime}ms`);
                         resolve(result);
                     } catch (error) {
-                        console.error(`${(option as any).sqlId ?? option!.tableName} service ${propertyKey} have an error:${error}, it's argumens: ${JSON.stringify(args.filter(i => typeof i !== 'object' || (typeof i === 'object' && !i.insert)))}`)
+                        let args = '';
+                        if (args.length > 0 && (args[0] as any).params) {
+                            args = JSON.stringify((args[0] as any).params);
+                        }
+                        console.error(`${(option as any).sqlId ?? option.tableName} service ${propertyKey} have an error:${error}, it's argumens: ${args}`);
                         reject(error);
                     } finally {
                         if (needRealseConn && option && option!.conn) {
@@ -5277,7 +5293,7 @@ export async function excuteWithLock<T>(config: {
     /** 单个锁多少【毫秒】后自动释放?默认：60*1000MS  */
     lockMaxTime?: number;
 }, fn__: () => Promise<T>): Promise<T> {
-    const key = `[lock]${typeof config.key === 'function' ? config.key() : config.key}`;
+    const key = (config as any).key_real ? `[lock]${(config as any).key_real}` : `[lock]${typeof config.key === 'function' ? config.key() : config.key}`;
     const db = getRedisDB();
     let wait_time = 0;
     const fn = async () => {
@@ -5325,7 +5341,7 @@ export function MethodLock<T = any>(config: {
     return function (target: T, _propertyKey: string, descriptor: PropertyDescriptor) {
         const fn__ = descriptor.value;
         descriptor.value = async function (this: any, ...args: any[]) {
-            config.key = typeof config.key === 'function' ? config.key.call(target, ...args) : config.key;
+            (config as any).key_real = typeof config.key === 'function' ? config.key.call(target, ...args) : config.key;
             return await excuteWithLock(config, async () => await fn__.call(this, ...args));
         };
     };
@@ -5414,7 +5430,7 @@ async function clearParent(clearKey: string) {
  */
 export async function excuteWithCache<T>(config: {
     /** 返回缓存key,参数=方法的参数+当前用户对象，可以用来清空缓存。 */
-    key: string;
+    key: ((...args: any[]) => string) | string;
     /** 返回缓存清除key,参数=方法的参数+当前用户对象，可以用来批量清空缓存 */
     clearKey?: string[];
     /** 自动清空缓存的时间，单位分钟 */
@@ -5423,15 +5439,16 @@ export async function excuteWithCache<T>(config: {
     clearWithSession?: boolean;
 }, fn: () => Promise<T>): Promise<T> {
     const db = getRedisDB();
-    const cache = await db.get(`[cache]${config.key}`);
+    const key = typeof config.key === 'function' ? config.key() : config.key;
+    const cache = await db.get(`[cache]${key}`);
     if (cache) {
-        (globalThis[_LoggerService]! as LoggerService).debug?.(`cache ${config.key} hit!`);
+        (globalThis[_LoggerService]! as LoggerService).debug?.(`cache ${key} hit!`);
         return JSON.parse(cache as string);
     } else {
-        (globalThis[_LoggerService]! as LoggerService).debug?.(`cache ${config.key} miss!`);
         const result = await fn();
+        (globalThis[_LoggerService]! as LoggerService).debug?.(`cache ${key} miss!`);
         await setMethodCache({
-            key: config.key,
+            key,
             clearKey: config.clearKey,
             autoClearTime: config.autoClearTime,
             result
