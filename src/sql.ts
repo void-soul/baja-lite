@@ -7,7 +7,7 @@ import pino, { Logger } from 'pino';
 import { formatDialect, mysql, postgresql, sqlite } from 'sql-formatter';
 import tslib from 'tslib';
 import { convert, XML } from './convert-xml.js';
-import { DatabaseError, Throw } from './error.js';
+import { Throw } from './error.js';
 import { excuteSplit, ExcuteSplitMode, sleep } from './fn.js';
 import { add, calc, ten2Any } from './math.js';
 import { C2P, C2P2, P2C } from './object.js';
@@ -624,20 +624,19 @@ class MysqlConnection implements Connection {
         if (globalThis[_GlobalSqlOption].log === 'trace') {
             (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
-        return new Promise<{ affectedRows: number; insertId: bigint; }>(async (resolve, reject) => {
+        return (async (): Promise<{ affectedRows: number; insertId: bigint; }> => {
             try {
                 const [_result] = await this[_daoConnection].execute(sql, params);
                 const result = _result as any;
                 if (globalThis[_GlobalSqlOption].log === 'trace') {
                     (globalThis[_LoggerService]! as LoggerService).verbose?.(result);
                 }
-                resolve({ affectedRows: result.affectedRows, insertId: result.insertId });
+                return { affectedRows: result.affectedRows, insertId: result.insertId };
             } catch (error) {
-                const dbError = DatabaseError.query('MySQL execute failed', sql, params, error as Error);
-                (globalThis[_LoggerService]! as LoggerService).error(dbError.getSafeMessage(), { cause: error });
-                reject(dbError);
+                (globalThis[_LoggerService]! as LoggerService).error(error.message, { cause: error });
+                throw error;
             }
-        });
+        })();
     }
 
     pluck<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T | null;
@@ -652,24 +651,23 @@ class MysqlConnection implements Connection {
         if (globalThis[_GlobalSqlOption].log === 'trace') {
             (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
-        return new Promise<T | null>(async (resolve, reject) => {
+        return (async (): Promise<T | null> => {
             try {
                 const [result] = await this[_daoConnection].query(sql, params);
                 if (result && result[0]) {
                     const r = Object.values(result[0])[0];
-                    resolve(r === null ? null : r as T);
-                } else {
-                    resolve(null);
+                    return r === null ? null : r as T;
                 }
+                return null;
             } catch (error) {
                 (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
                 `);
-                reject(error);
+                throw error;
             }
-        });
+        })();
     }
 
     get<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T | null;
@@ -684,23 +682,25 @@ class MysqlConnection implements Connection {
         if (globalThis[_GlobalSqlOption].log === 'trace') {
             (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
-        return new Promise<T | null>(async (resolve, reject) => {
+        return (async (): Promise<T | null> => {
             try {
                 const [result] = await this[_daoConnection].query(sql, params);
                 if (globalThis[_GlobalSqlOption].log === 'trace') {
                     (globalThis[_LoggerService]! as LoggerService).verbose?.(result);
                 }
-                if (result && result[0]) resolve(result[0] as T);
-                resolve(null);
+                if (result && result[0]) {
+                    return result[0] as T;
+                }
+                return null;
             } catch (error) {
                 (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
                 `);
-                reject(error);
+                throw error;
             }
-        });
+        })();
     }
 
     raw<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T[];
@@ -715,23 +715,27 @@ class MysqlConnection implements Connection {
         if (globalThis[_GlobalSqlOption].log === 'trace') {
             (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
-        return new Promise<T[]>(async (resolve, reject) => {
+        return (async (): Promise<T[]> => {
             try {
                 const [result] = await this[_daoConnection].query(sql, params);
                 if (globalThis[_GlobalSqlOption].log === 'trace') {
                     (globalThis[_LoggerService]! as LoggerService).verbose?.(result);
                 }
-                if (result) resolve(result.map((i: any) => Object.values(i)[0]));
-                resolve([]);
+                // 修复 fall-through：原代码 `if (result) resolve(...); resolve([])` 第二行
+                // 是 no-op，但写法埋雷。
+                if (result) {
+                    return result.map((i: any) => Object.values(i)[0]);
+                }
+                return [];
             } catch (error) {
                 (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
                 `);
-                reject(error);
+                throw error;
             }
-        });
+        })();
     }
 
     query<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T[];
@@ -746,22 +750,22 @@ class MysqlConnection implements Connection {
         if (globalThis[_GlobalSqlOption].log === 'trace') {
             (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
-        return new Promise<T[]>(async (resolve, reject) => {
+        return (async (): Promise<T[]> => {
             try {
                 const [result] = await this[_daoConnection].query(sql, params);
                 if (globalThis[_GlobalSqlOption].log === 'trace') {
                     (globalThis[_LoggerService]! as LoggerService).verbose?.(result);
                 }
-                resolve(result);
+                return result;
             } catch (error) {
                 (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
                 `);
-                reject(error);
+                throw error;
             }
-        });
+        })();
     }
 
     release(sync: SyncMode.Sync): void;
@@ -791,8 +795,8 @@ export class Mysql implements Dao {
         try {
             connection = await this.createConnection(SyncMode.Async);
             if (connection) {
-                const data = await connection.query(SyncMode.Async, 'SELECT 1 FROM DUAL');
-                (globalThis[_LoggerService]! as LoggerService).debug?.('keepAlive->', data?.[0]?.[1]);
+                await connection.query(SyncMode.Async, 'SELECT 1 FROM DUAL');
+                // (globalThis[_LoggerService]! as LoggerService).debug?.('keepAlive->', data?.[0]?.[1]);
             }
         } catch (error) {
             (globalThis[_LoggerService]! as LoggerService).error('keepAlive error', error);
@@ -813,17 +817,16 @@ export class Mysql implements Dao {
             (globalThis[_LoggerService]! as LoggerService).error('MYSQL not supported sync mode');
             return null;
         };
-        return new Promise<Connection>(async (resolve, reject) => {
+        return (async (): Promise<Connection> => {
             try {
                 const connection = await this[_daoDB].getConnection();
                 (globalThis[_LoggerService]! as LoggerService).debug?.('create new connection!');
-                resolve(new MysqlConnection(connection));
+                return new MysqlConnection(connection);
             } catch (error) {
-                const dbError = DatabaseError.connection('Failed to create MySQL connection', error as Error);
-                (globalThis[_LoggerService]! as LoggerService).error(dbError.getSafeMessage(), { cause: error });
-                reject(dbError);
+                (globalThis[_LoggerService]! as LoggerService).error(error.message, { cause: error });
+                throw error;
             }
-        });
+        })();
     }
 
     transaction<T = any>(sync: SyncMode.Sync, fn: (conn: Connection) => T, conn?: Connection | null): T | null;
@@ -833,7 +836,7 @@ export class Mysql implements Dao {
             (globalThis[_LoggerService]! as LoggerService).warn('MYSQL not supported sync mode');
             return null;
         };
-        return new Promise<T>(async (resolve, reject) => {
+        return (async (): Promise<T> => {
             let needCommit = false;
             let newConn = false;
             if (!conn) {
@@ -854,16 +857,15 @@ export class Mysql implements Dao {
                     await conn![_daoConnection].commit();
                     (globalThis[_LoggerService]! as LoggerService).debug?.('commit end!');
                 }
-                resolve(result);
+                return result;
             } catch (error) {
                 if (needCommit) {
                     (globalThis[_LoggerService]! as LoggerService).debug?.('rollback begin!');
                     await conn![_daoConnection].rollback();
                     (globalThis[_LoggerService]! as LoggerService).debug?.('rollback end!');
                 }
-                const dbError = error instanceof DatabaseError ? error : DatabaseError.transaction('MySQL transaction failed', error as Error);
-                (globalThis[_LoggerService]! as LoggerService).error(dbError.getSafeMessage(), { cause: error });
-                reject(dbError);
+                (globalThis[_LoggerService]! as LoggerService).error(error.message, { cause: error });
+                throw error;
             } finally {
                 try {
                     if (needCommit) {
@@ -879,7 +881,7 @@ export class Mysql implements Dao {
                     (globalThis[_LoggerService]! as LoggerService).warn?.('Failed to release connection in finally block', error);
                 }
             }
-        });
+        })();
     }
 
     close(sync: SyncMode.Sync): void;
@@ -927,7 +929,7 @@ class PostgresqlConnection implements Connection {
         if (globalThis[_GlobalSqlOption].log === 'trace') {
             (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
-        return new Promise<{ affectedRows: number; insertId: bigint; }>(async (resolve, reject) => {
+        return (async (): Promise<{ affectedRows: number; insertId: bigint; }> => {
             try {
                 const { rowCount } = await this[_daoConnection].query({
                     text: replacePlaceholders(sql),
@@ -937,16 +939,16 @@ class PostgresqlConnection implements Connection {
                 if (globalThis[_GlobalSqlOption].log === 'trace') {
                     (globalThis[_LoggerService]! as LoggerService).verbose?.(result);
                 }
-                resolve({ affectedRows: rowCount || 0, insertId: 0n });
+                return { affectedRows: rowCount || 0, insertId: 0n };
             } catch (error) {
                 (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
                 `);
-                reject(error);
+                throw error;
             }
-        });
+        })();
     }
 
     pluck<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T | null;
@@ -961,27 +963,28 @@ class PostgresqlConnection implements Connection {
         if (globalThis[_GlobalSqlOption].log === 'trace') {
             (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
-        return new Promise<T | null>(async (resolve, reject) => {
+        return (async (): Promise<T | null> => {
             try {
                 const { rows } = await this[_daoConnection].query({
                     text: replacePlaceholders(sql),
                     values: params
                 });
+                // 修复 fall-through：原代码 if 分支 resolve 后没 return，导致 resolve(null)
+                // 紧跟其后（虽然第二次 resolve 是 no-op，但写法有歧义）。
                 if (rows && rows[0]) {
                     const r = Object.values(rows[0])[0];
-                    if (r === null) resolve(r);
-                    else resolve(r as T);
+                    return r === null ? null : r as T;
                 }
-                resolve(null);
+                return null;
             } catch (error) {
                 (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
                 `);
-                reject(error);
+                throw error;
             }
-        });
+        })();
     }
 
     get<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T | null;
@@ -996,7 +999,7 @@ class PostgresqlConnection implements Connection {
         if (globalThis[_GlobalSqlOption].log === 'trace') {
             (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
-        return new Promise<T | null>(async (resolve, reject) => {
+        return (async (): Promise<T | null> => {
             try {
                 const { rows } = await this[_daoConnection].query({
                     text: replacePlaceholders(sql),
@@ -1005,17 +1008,19 @@ class PostgresqlConnection implements Connection {
                 if (globalThis[_GlobalSqlOption].log === 'trace') {
                     (globalThis[_LoggerService]! as LoggerService).verbose?.(rows);
                 }
-                if (rows && rows[0]) resolve(rows[0] as T);
-                resolve(null);
+                if (rows && rows[0]) {
+                    return rows[0] as T;
+                }
+                return null;
             } catch (error) {
                 (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
                 `);
-                reject(error);
+                throw error;
             }
-        });
+        })();
     }
 
     raw<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T[];
@@ -1030,7 +1035,7 @@ class PostgresqlConnection implements Connection {
         if (globalThis[_GlobalSqlOption].log === 'trace') {
             (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
-        return new Promise<T[]>(async (resolve, reject) => {
+        return (async (): Promise<T[]> => {
             try {
                 const { rows } = await this[_daoConnection].query({
                     text: replacePlaceholders(sql),
@@ -1039,17 +1044,19 @@ class PostgresqlConnection implements Connection {
                 if (globalThis[_GlobalSqlOption].log === 'trace') {
                     (globalThis[_LoggerService]! as LoggerService).verbose?.(rows);
                 }
-                if (rows) resolve(rows.map((i: any) => Object.values(i)[0]));
-                resolve([]);
+                if (rows) {
+                    return rows.map((i: any) => Object.values(i)[0]);
+                }
+                return [];
             } catch (error) {
                 (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
                 `);
-                reject(error);
+                throw error;
             }
-        });
+        })();
     }
 
     query<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T[];
@@ -1064,7 +1071,7 @@ class PostgresqlConnection implements Connection {
         if (globalThis[_GlobalSqlOption].log === 'trace') {
             (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
-        return new Promise<T[]>(async (resolve, reject) => {
+        return (async (): Promise<T[]> => {
             try {
                 const { rows } = await this[_daoConnection].query({
                     text: replacePlaceholders(sql),
@@ -1073,16 +1080,16 @@ class PostgresqlConnection implements Connection {
                 if (globalThis[_GlobalSqlOption].log === 'trace') {
                     (globalThis[_LoggerService]! as LoggerService).verbose?.(rows);
                 }
-                resolve(rows);
+                return rows;
             } catch (error) {
                 (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
                 `);
-                reject(error);
+                throw error;
             }
-        });
+        })();
     }
 
     release(sync: SyncMode.Sync): void;
@@ -1111,8 +1118,8 @@ export class Postgresql implements Dao {
         try {
             connection = await this.createConnection(SyncMode.Async);
             if (connection) {
-                const data = await connection.query(SyncMode.Async, 'SELECT 1 FROM DUAL');
-                (globalThis[_LoggerService]! as LoggerService).debug?.('keepAlive->', data?.[0]?.[1]);
+                await connection.query(SyncMode.Async, 'SELECT 1 FROM DUAL');
+                // (globalThis[_LoggerService]! as LoggerService).debug?.('keepAlive->', data?.[0]?.[1]);
             }
         } catch (error) {
             (globalThis[_LoggerService]! as LoggerService).error('keepAlive error', error);
@@ -1132,15 +1139,15 @@ export class Postgresql implements Dao {
             (globalThis[_LoggerService]! as LoggerService).error('Postgresql not supported sync mode');
             return null;
         };
-        return new Promise<Connection>(async (resolve, reject) => {
+        return (async (): Promise<Connection> => {
             try {
                 const connection = await this[_daoDB].connect();
                 (globalThis[_LoggerService]! as LoggerService).debug?.('create new connection!');
-                resolve(new PostgresqlConnection(connection));
+                return new PostgresqlConnection(connection);
             } catch (error) {
-                reject(error);
+                throw error;
             }
-        });
+        })();
     }
 
     transaction<T = any>(sync: SyncMode.Sync, fn: (conn: Connection) => T, conn?: Connection | null): T | null;
@@ -1150,7 +1157,7 @@ export class Postgresql implements Dao {
             (globalThis[_LoggerService]! as LoggerService).warn('Postgresql not supported sync mode');
             return null;
         };
-        return new Promise<T>(async (resolve, reject) => {
+        return (async (): Promise<T> => {
             let needCommit = false;
             let newConn = false;
             if (!conn) {
@@ -1171,16 +1178,15 @@ export class Postgresql implements Dao {
                     await conn![_daoConnection].query('COMMIT');
                     (globalThis[_LoggerService]! as LoggerService).debug?.('commit end!');
                 }
-                resolve(result);
+                return result;
             } catch (error) {
                 if (needCommit) {
                     (globalThis[_LoggerService]! as LoggerService).debug?.('rollback begin!');
                     await conn![_daoConnection].query('ROLLBACK');
                     (globalThis[_LoggerService]! as LoggerService).debug?.('rollback end!');
                 }
-                const dbError = error instanceof DatabaseError ? error : DatabaseError.transaction('PostgreSQL transaction failed', error as Error);
-                (globalThis[_LoggerService]! as LoggerService).error(dbError.getSafeMessage(), { cause: error });
-                reject(dbError);
+                (globalThis[_LoggerService]! as LoggerService).error(error.message, { cause: error });
+                throw error;
             } finally {
                 try {
                     if (needCommit) {
@@ -1196,7 +1202,7 @@ export class Postgresql implements Dao {
                     (globalThis[_LoggerService]! as LoggerService).warn?.('Failed to release connection in finally block', error);
                 }
             }
-        });
+        })();
     }
 
     close(sync: SyncMode.Sync): void;
@@ -1487,20 +1493,20 @@ export class SqliteRemoteConnection implements Connection {
         if (globalThis[_GlobalSqlOption].log === 'trace') {
             (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
-        return new Promise<{ affectedRows: number; insertId: bigint; }>(async (resolve, reject) => {
+        return (async (): Promise<{ affectedRows: number; insertId: bigint; }> => {
             try {
                 const data = await this[_daoConnection].execute(encode([this[_sqliteRemoteName], sql, params], { extensionCodec }));
                 const { affectedRows, insertId } = decode(data, { extensionCodec }) as { affectedRows: number; insertId: bigint; };
-                resolve({ affectedRows, insertId: insertId ? BigInt(insertId) : 0n });
+                return { affectedRows, insertId: insertId ? BigInt(insertId) : 0n };
             } catch (error) {
                 (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
                 `);
-                reject(error);
+                throw error;
             }
-        });
+        })();
     }
 
     pluck<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T | null;
@@ -1515,20 +1521,19 @@ export class SqliteRemoteConnection implements Connection {
         if (globalThis[_GlobalSqlOption].log === 'trace') {
             (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
-        return new Promise<T | null>(async (resolve, reject) => {
+        return (async (): Promise<T | null> => {
             try {
                 const data = await this[_daoConnection].pluck(encode([this[_sqliteRemoteName], sql, params], { extensionCodec }));
-                const r = decode(data, { extensionCodec }) as T;
-                resolve(r);
+                return decode(data, { extensionCodec }) as T;
             } catch (error) {
                 (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
                 `);
-                reject(error);
+                throw error;
             }
-        });
+        })();
     }
 
     get<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T | null;
@@ -1543,20 +1548,19 @@ export class SqliteRemoteConnection implements Connection {
         if (globalThis[_GlobalSqlOption].log === 'trace') {
             (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
-        return new Promise<T | null>(async (resolve, reject) => {
+        return (async (): Promise<T | null> => {
             try {
                 const data = await this[_daoConnection].get(encode([this[_sqliteRemoteName], sql, params], { extensionCodec }));
-                const r = decode(data, { extensionCodec }) as T;
-                resolve(r);
+                return decode(data, { extensionCodec }) as T;
             } catch (error) {
                 (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
                 `);
-                reject(error);
+                throw error;
             }
-        });
+        })();
     }
 
     raw<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T[];
@@ -1571,20 +1575,19 @@ export class SqliteRemoteConnection implements Connection {
         if (globalThis[_GlobalSqlOption].log === 'trace') {
             (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
-        return new Promise<T[]>(async (resolve, reject) => {
+        return (async (): Promise<T[]> => {
             try {
                 const data = await this[_daoConnection].raw(encode([this[_sqliteRemoteName], sql, params], { extensionCodec }));
-                const r = decode(data, { extensionCodec }) as T[];
-                resolve(r);
+                return decode(data, { extensionCodec }) as T[];
             } catch (error) {
                 (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
                 `);
-                reject(error);
+                throw error;
             }
-        });
+        })();
     }
 
     query<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T[];
@@ -1599,20 +1602,19 @@ export class SqliteRemoteConnection implements Connection {
         if (globalThis[_GlobalSqlOption].log === 'trace') {
             (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
         }
-        return new Promise<T[]>(async (resolve, reject) => {
+        return (async (): Promise<T[]> => {
             try {
                 const data = await this[_daoConnection].query(encode([this[_sqliteRemoteName], sql, params], { extensionCodec }));
-                const r = decode(data, { extensionCodec }) as T[];
-                resolve(r);
+                return decode(data, { extensionCodec }) as T[];
             } catch (error) {
                 (globalThis[_LoggerService]! as LoggerService).error(`
                     error: ${error},
                     sql: ${sql},
                     params: ${params}
                 `);
-                reject(error);
+                throw error;
             }
-        });
+        })();
     }
 
     release(sync: SyncMode.Sync): void;
@@ -1638,16 +1640,10 @@ export class SqliteRemote implements Dao {
             (globalThis[_LoggerService]! as LoggerService).error('SQLITEREMOTE not supported sync mode');
             return null;
         };
-        return new Promise<Connection>(async (resolve, reject) => {
-            if (!this.connection) {
-                this.connection = new SqliteRemoteConnection(this[_daoDB], this[_sqliteRemoteName]);
-            }
-            try {
-                resolve(this.connection);
-            } catch (error) {
-                reject(error);
-            }
-        });
+        if (!this.connection) {
+            this.connection = new SqliteRemoteConnection(this[_daoDB], this[_sqliteRemoteName]);
+        }
+        return Promise.resolve(this.connection);
     }
 
     transaction<T = any>(sync: SyncMode.Sync, fn: (conn: Connection) => T, conn?: Connection | null): T | null;
@@ -2310,6 +2306,19 @@ function P<T extends object>(skipConn = false) {
             option!.dbType = this[_dbType] ?? globalThis[_GlobalSqlOption].dbType ?? DBType.Mysql;
             option!.dao = globalThis[_dao][option!.dbType!][option!.dbName] as Dao;
 
+            // 错误日志输出函数：原实现里 `let args = ''` 把外层 rest 参数 `args` 给遮蔽了，
+            // 导致 args.length 永远是 0，params 日志永远打不出来，生产排查时丢失关键上下文。
+            const dumpArgs = (callArgs: any[]) => {
+                if (callArgs.length > 0 && callArgs[0] && (callArgs[0] as any).params) {
+                    try {
+                        return JSON.stringify((callArgs[0] as any).params);
+                    } catch {
+                        return '<unserializable params>';
+                    }
+                }
+                return '';
+            };
+
             if (option!.dbType === DBType.Sqlite) {
                 if (!option!.dao) {
                     const db = new Sqlite(new globalThis[_GlobalSqlOption].BetterSqlite3(option!.dbName as any, { fileMustExist: false }));
@@ -2332,11 +2341,7 @@ function P<T extends object>(skipConn = false) {
                     (globalThis[_LoggerService]! as LoggerService).log(`${propertyKey}:${(option as any).sqlId ?? option!.tableName}:use ${+new Date() - startTime}ms`);
                     return result;
                 } catch (error) {
-                    let args = '';
-                    if (args.length > 0 && (args[0] as any).params) {
-                        args = JSON.stringify((args[0] as any).params);
-                    }
-                    console.error(`${(option as any).sqlId ?? option.tableName} service ${propertyKey} have an error:${error}, it's argumens: ${args}`);
+                    console.error(`${(option as any).sqlId ?? option.tableName} service ${propertyKey} have an error:${error}, it's argumens: ${dumpArgs(args)}`);
                     throw error;
                 } finally {
                     if (needRealseConn && option && option!.conn) {
@@ -2358,24 +2363,20 @@ function P<T extends object>(skipConn = false) {
                 }
 
                 Throw.if(option.sync === SyncMode.Sync, 'SqliteRemote remote can not sync!')
-                return new Promise(async (resolve, reject) => {
-                    // 连接共享
-                    if (skipConn === false && !option!.conn) {
-                        (option!).conn = await option!.dao!.createConnection(SyncMode.Async);
-                    } else {
-                        needRealseConn = false;
-                    }
+                return (async () => {
                     try {
+                        // 连接共享
+                        if (skipConn === false && !option!.conn) {
+                            (option!).conn = await option!.dao!.createConnection(SyncMode.Async);
+                        } else {
+                            needRealseConn = false;
+                        }
                         const result = await fn.call(this, ...args);
                         (globalThis[_LoggerService]! as LoggerService).log(`${propertyKey}:${(option as any).sqlId ?? option!.tableName}:use ${+new Date() - startTime}ms`);
-                        resolve(result);
+                        return result;
                     } catch (error) {
-                        let args = '';
-                        if (args.length > 0 && (args[0] as any).params) {
-                            args = JSON.stringify((args[0] as any).params);
-                        }
-                        console.error(`${(option as any).sqlId ?? option.tableName} service ${propertyKey} have an error:${error}, it's argumens: ${args}`);
-                        reject(error);
+                        console.error(`${(option as any).sqlId ?? option.tableName} service ${propertyKey} have an error:${error}, it's argumens: ${dumpArgs(args)}`);
+                        throw error;
                     } finally {
                         if (needRealseConn && option && option!.conn) {
                             try {
@@ -2385,11 +2386,11 @@ function P<T extends object>(skipConn = false) {
                             }
                         }
                     }
-                });
+                })();
 
             } else if (option!.dbType === DBType.Mysql) {
                 Throw.if(!option!.dao, `not found db:${String(option!.dbName)}(${option!.dbType})`);
-                return new Promise(async (resolve, reject) => {
+                return (async () => {
                     try {
                         // 连接共享
                         if (skipConn === false && !option!.conn) {
@@ -2399,14 +2400,10 @@ function P<T extends object>(skipConn = false) {
                         }
                         const result = await fn.call(this, ...args);
                         (globalThis[_LoggerService]! as LoggerService).log(`${propertyKey}:${(option as any).sqlId ?? option!.tableName}:use ${+new Date() - startTime}ms`);
-                        resolve(result);
+                        return result;
                     } catch (error) {
-                        let args = '';
-                        if (args.length > 0 && (args[0] as any).params) {
-                            args = JSON.stringify((args[0] as any).params);
-                        }
-                        console.error(`${(option as any).sqlId ?? option.tableName} service ${propertyKey} have an error:${error}, it's argumens: ${args}`);
-                        reject(error);
+                        console.error(`${(option as any).sqlId ?? option.tableName} service ${propertyKey} have an error:${error}, it's argumens: ${dumpArgs(args)}`);
+                        throw error;
                     } finally {
                         if (needRealseConn && option && option!.conn) {
                             try {
@@ -2416,10 +2413,10 @@ function P<T extends object>(skipConn = false) {
                             }
                         }
                     }
-                });
+                })();
             } else if (option!.dbType === DBType.Postgresql) {
                 Throw.if(!option!.dao, `not found db:${String(option!.dbName)}(${option!.dbType})`);
-                return new Promise(async (resolve, reject) => {
+                return (async () => {
                     try {
                         // 连接共享
                         if (skipConn === false && !option!.conn) {
@@ -2429,14 +2426,10 @@ function P<T extends object>(skipConn = false) {
                         }
                         const result = await fn.call(this, ...args);
                         (globalThis[_LoggerService]! as LoggerService).log(`${propertyKey}:${(option as any).sqlId ?? option!.tableName}:use ${+new Date() - startTime}ms`);
-                        resolve(result);
+                        return result;
                     } catch (error) {
-                        let args = '';
-                        if (args.length > 0 && (args[0] as any).params) {
-                            args = JSON.stringify((args[0] as any).params);
-                        }
-                        console.error(`${(option as any).sqlId ?? option.tableName} service ${propertyKey} have an error:${error}, it's argumens: ${args}`);
-                        reject(error);
+                        console.error(`${(option as any).sqlId ?? option.tableName} service ${propertyKey} have an error:${error}, it's argumens: ${dumpArgs(args)}`);
+                        throw error;
                     } finally {
                         if (needRealseConn && option && option!.conn) {
                             try {
@@ -2446,7 +2439,7 @@ function P<T extends object>(skipConn = false) {
                             }
                         }
                     }
-                });
+                })();
             }
         };
     };
@@ -2839,7 +2832,9 @@ export class SqlService<T extends object> {
                 break;
             }
             case InsertMode.InsertWithTempTable: {
-                const tableTemp = `${option?.tableName}_${Math.random()}`.replace(/\./, '');
+                // 用 snowflake 替代 Math.random()——Math.random() 在高并发下可能碰撞，
+                // 同一连接里多次 InsertWithTempTable 会因为撞名 DDL 报错。
+                const tableTemp = `${option?.tableName}_${snowflake.generate()}`;
                 const tableTempESC = tableTemp;
                 sqls.push({ sql: `DROP TABLE IF EXISTS ${tableTempESC};` });
                 const finalColumns = new Set<string>();
@@ -3166,7 +3161,7 @@ export class SqlService<T extends object> {
         Throw.if(!!option.id && !!option.where && !option.whereSql, 'id and where only one can set!');
 
         option.mode ??= DeleteMode.Common;
-        const tableTemp = `${option?.tableName}_${Math.random()}`.replace(/\./, '');
+        const tableTemp = `${option?.tableName}_${snowflake.generate()}`;
         const tableTempESC = tableTemp;
         const tableNameESC = option?.tableName;
 
@@ -3341,7 +3336,7 @@ export class SqlService<T extends object> {
         option.mode ??= SelectMode.Common;
         option.templateResult ??= TemplateResult.AssertOne;
         option.error ??= 'error data!';
-        const tableTemp = `${option?.tableName}_${Math.random()}`.replace(/\./, '');
+        const tableTemp = `${option?.tableName}_${snowflake.generate()}`;
         const tableTempESC = tableTemp;
         const tableNameESC = option?.tableName;
 
@@ -3386,21 +3381,17 @@ export class SqlService<T extends object> {
             }
             return this._template(option.templateResult, result, option.error);
         } else {
-            return new Promise<L | null | L[]>(async (resolve, reject) => {
-                try {
-                    let result: any;
-                    for (let i = 0; i < sqls.length; i++) {
-                        if (i === resultIndex) {
-                            result = await option!.conn!.query(SyncMode.Async, sqls[i]?.sql, sqls[i]?.params);
-                        } else {
-                            await option!.conn!.execute(SyncMode.Async, sqls[i]?.sql, sqls[i]?.params);
-                        }
+            return (async (): Promise<L | null | L[]> => {
+                let result: any;
+                for (let i = 0; i < sqls.length; i++) {
+                    if (i === resultIndex) {
+                        result = await option!.conn!.query(SyncMode.Async, sqls[i]?.sql, sqls[i]?.params);
+                    } else {
+                        await option!.conn!.execute(SyncMode.Async, sqls[i]?.sql, sqls[i]?.params);
                     }
-                    resolve(this._template(option.templateResult!, result, option.error));
-                } catch (error) {
-                    reject(error);
                 }
-            });
+                return this._template(option.templateResult!, result, option.error);
+            })();
         }
     }
 
@@ -3559,14 +3550,10 @@ export class SqlService<T extends object> {
             const result = option!.conn!.query(SyncMode.Sync, sql, params);
             return this._select<L>(option.selectResult, result, option.defValue, option.errorMsg, option.hump, option.mapper, option.mapperIfUndefined, option.dataConvert);
         } else {
-            return new Promise<L | null | L[]>(async (resolve, reject) => {
-                try {
-                    const result = await option!.conn!.query(SyncMode.Async, sql, params);
-                    resolve(this._select<L>(option.selectResult!, result, option.defValue!, option.errorMsg, option.hump, option.mapper, option.mapperIfUndefined, option.dataConvert));
-                } catch (error) {
-                    reject(error);
-                }
-            });
+            return (async (): Promise<L | null | L[]> => {
+                const result = await option!.conn!.query(SyncMode.Async, sql, params);
+                return this._select<L>(option.selectResult!, result, option.defValue!, option.errorMsg, option.hump, option.mapper, option.mapperIfUndefined, option.dataConvert)!;
+            })();
         }
     }
 
@@ -3626,14 +3613,10 @@ export class SqlService<T extends object> {
             const result = option!.conn!.query<{ [K in keyof T]: T[K][] }>(SyncMode.Sync, sql, params);
             return result.map(item => this._select<{ [K in keyof T]: T[K][]; }>(option.selectResult!, item, null, undefined, option.hump, option.mapper, option.mapperIfUndefined, option.dataConvert)) as { [K in keyof T]: T[K][] };
         } else {
-            return new Promise<{ [K in keyof T]: T[K][] }>(async (resolve, reject) => {
-                try {
-                    const result = await option!.conn!.query<{ [K in keyof T]: T[K][] }>(SyncMode.Async, sql, params);
-                    resolve(result.map(item => this._select<{ [K in keyof T]: T[K][]; }>(option.selectResult!, item, null, undefined, option.hump, option.mapper, option.mapperIfUndefined, option.dataConvert)) as { [K in keyof T]: T[K][] });
-                } catch (error) {
-                    reject(error);
-                }
-            });
+            return (async (): Promise<{ [K in keyof T]: T[K][] }> => {
+                const result = await option!.conn!.query<{ [K in keyof T]: T[K][] }>(SyncMode.Async, sql, params);
+                return result.map(item => this._select<{ [K in keyof T]: T[K][]; }>(option.selectResult!, item, null, undefined, option.hump, option.mapper, option.mapperIfUndefined, option.dataConvert)) as { [K in keyof T]: T[K][] };
+            })();
         }
     }
 
@@ -3664,14 +3647,10 @@ export class SqlService<T extends object> {
             const result = option!.conn!.execute(SyncMode.Sync, sql, params);
             return result.affectedRows;
         } else {
-            return new Promise<number>(async (resolve, reject) => {
-                try {
-                    const result = await option!.conn!.execute(SyncMode.Async, sql, params);
-                    resolve(result.affectedRows);
-                } catch (error) {
-                    reject(error);
-                }
-            });
+            return (async (): Promise<number> => {
+                const result = await option!.conn!.execute(SyncMode.Async, sql, params);
+                return result.affectedRows;
+            })();
         }
     }
 
@@ -3699,14 +3678,7 @@ export class SqlService<T extends object> {
         if (option.sync === SyncMode.Sync) {
             return option!.dao!.transaction(SyncMode.Sync, option.fn as (conn: Connection) => L, option.conn)!;
         } else {
-            return new Promise(async (resolve, reject) => {
-                try {
-                    const rt = await option!.dao!.transaction(SyncMode.Async, option.fn as (conn: Connection) => Promise<L>, option.conn);
-                    resolve(rt);
-                } catch (error) {
-                    reject(error);
-                }
-            });
+            return option!.dao!.transaction(SyncMode.Async, option.fn as (conn: Connection) => Promise<L>, option.conn);
         }
     }
 
@@ -3729,7 +3701,10 @@ export class SqlService<T extends object> {
         if (option.hump || (option.hump === undefined && globalThis[_Hump]) && option.sortName) {
             option.sortName = P2C(option.sortName!);
         }
-        Object.assign(
+        // 不要 Object.assign 进调用方的 params——@P 装饰器对 option 只做了浅拷贝，
+        // option.params 仍指向用户传入的对象，原写法会把分页字段写回去污染下一次调用。
+        option.params = Object.assign(
+            {},
             option.params,
             {
                 limitStart: calc(option.pageNumber).sub(1).mul(option.pageSize).over(),
@@ -3791,42 +3766,40 @@ export class SqlService<T extends object> {
             }
             return result;
         } else {
-            return new Promise<PageQuery<L>>(async (resolve, reject) => {
-                try {
-                    if (sqlCount) {
-                        result.total = await this.select<number>({
-                            ...option,
-                            sql: sqlCount,
-                            sync: SyncMode.Async,
-                            selectResult: SelectResult.R_C_Assert
-                        });
-                        result.size = calc(result.total)
-                            .add(option.pageSize ?? 10 - 1)
-                            .div(option.pageSize)
-                            .round(0, 2)
-                            .over();
-                    }
-                    if (sqlSum) {
-                        result.sum = await this.select<Record<string, number>>({
-                            ...option,
-                            sql: sqlSum,
-                            sync: SyncMode.Async,
-                            selectResult: SelectResult.R_CS_Assert
-                        });
-                    }
-                    if (sql) {
-                        result.records = await this.select<L>({
-                            ...option,
-                            sql,
-                            sync: SyncMode.Async,
-                            selectResult: SelectResult.RS_CS
-                        });
-                    }
-                    resolve(result);
-                } catch (error) {
-                    reject(error);
+            return (async (): Promise<PageQuery<L>> => {
+                if (sqlCount) {
+                    result.total = await this.select<number>({
+                        ...option,
+                        sql: sqlCount,
+                        sync: SyncMode.Async,
+                        selectResult: SelectResult.R_C_Assert
+                    });
+                    // 修正运算符优先级：`option.pageSize ?? 10 - 1` 被解析为 `pageSize ?? 9`，
+                    // 而同步分支用的是 `option.pageSize - 1`，行为不一致。
+                    result.size = calc(result.total)
+                        .add((option.pageSize ?? 10) - 1)
+                        .div(option.pageSize)
+                        .round(0, 2)
+                        .over();
                 }
-            });
+                if (sqlSum) {
+                    result.sum = await this.select<Record<string, number>>({
+                        ...option,
+                        sql: sqlSum,
+                        sync: SyncMode.Async,
+                        selectResult: SelectResult.R_CS_Assert
+                    });
+                }
+                if (sql) {
+                    result.records = await this.select<L>({
+                        ...option,
+                        sql,
+                        sync: SyncMode.Async,
+                        selectResult: SelectResult.RS_CS
+                    });
+                }
+                return result;
+            })();
         }
     }
 
@@ -3937,47 +3910,26 @@ export class SqlService<T extends object> {
             }
         } else if (option!.dbType === DBType.SqliteRemote) {
 
-            return new Promise(async (resolve, reject) => {
-                try {
-                    if (option?.force) {
-                        await option!.conn!.execute(SyncMode.Async, `DROP TABLE IF EXISTS ${tableES};`);
-                    }
-                    const lastVersion = this[_sqlite_version] ?? '1';
-                    // 检查表
-                    const tableCheckResult = await option!.conn!.pluck<number>(SyncMode.Async, `SELECT COUNT(1) t FROM sqlite_master WHERE TYPE = 'table' AND name = ?`, [option!.tableName]);
-                    if (tableCheckResult) {
-                        // 旧版本
-                        const tableVersion = await option!.conn!.pluck<string>(SyncMode.Async, 'SELECT ______version v from TABLE_VERSION WHERE ______tableName = ?', [option!.tableName]);
-                        if (tableVersion && tableVersion < lastVersion) { // 发现需要升级的版本
-                            // 更新版本
-                            const columns = iterate<{ name: string }>(await option!.conn!.query(SyncMode.Async, `PRAGMA table_info(${tableES})`))
-                                .filter(c => this[_fields]!.hasOwnProperty(C2P(c.name, globalThis[_Hump])))
-                                .map(c => c.name)
-                                .join(',');
+            return (async (): Promise<void> => {
+                if (option?.force) {
+                    await option!.conn!.execute(SyncMode.Async, `DROP TABLE IF EXISTS ${tableES};`);
+                }
+                const lastVersion = this[_sqlite_version] ?? '1';
+                // 检查表
+                const tableCheckResult = await option!.conn!.pluck<number>(SyncMode.Async, `SELECT COUNT(1) t FROM sqlite_master WHERE TYPE = 'table' AND name = ?`, [option!.tableName]);
+                if (tableCheckResult) {
+                    // 旧版本
+                    const tableVersion = await option!.conn!.pluck<string>(SyncMode.Async, 'SELECT ______version v from TABLE_VERSION WHERE ______tableName = ?', [option!.tableName]);
+                    if (tableVersion && tableVersion < lastVersion) { // 发现需要升级的版本
+                        // 更新版本
+                        const columns = iterate<{ name: string }>(await option!.conn!.query(SyncMode.Async, `PRAGMA table_info(${tableES})`))
+                            .filter(c => this[_fields]!.hasOwnProperty(C2P(c.name, globalThis[_Hump])))
+                            .map(c => c.name)
+                            .join(',');
 
-                            const rtable = `${option!.tableName}_${tableVersion.replace(/\./, '_')}`;
-                            await option!.conn!.execute(SyncMode.Async, `DROP TABLE IF EXISTS ${rtable};`);
-                            await option!.conn!.execute(SyncMode.Async, `ALTER TABLE ${tableES} RENAME TO ${rtable};`);
-                            await option!.conn!.execute(SyncMode.Async, `
-                            CREATE TABLE IF NOT EXISTS ${tableES}(
-                                ${Object.values(this[_fields]!).map(K => K[DBType.Sqlite]()).join(',')}
-                                ${this[_ids] && this[_ids].length ? `, PRIMARY KEY (${this[_ids].map(i => this[_fields]![i]?.C2()).join(',')})` : ''}
-                            );
-                        `);
-                            if (this[_index] && this[_index].length) {
-                                for (const index of this[_index]) {
-                                    await option!.conn!.execute(SyncMode.Async, `CREATE INDEX ${`${index}_${Math.random()}`.replace(/\./, '')} ON ${tableES} ("${this[_fields]![index]?.C2()}");`);
-                                }
-                            }
-                            await option!.conn!.execute(SyncMode.Async, `INSERT INTO ${tableES} (${columns}) SELECT ${columns} FROM ${rtable};`);
-                            await option!.conn!.execute(SyncMode.Async, `DROP TABLE IF EXISTS ${rtable};`);
-                            // 更新完毕，保存版本号
-                            await option!.conn!.execute(SyncMode.Async, 'UPDATE TABLE_VERSION SET ______version = ? WHERE ______tableName = ?', [option!.tableName, lastVersion]);
-                        } else if (!tableVersion) { // 不需要升级情况：没有旧的版本号
-                            await option!.conn!.execute(SyncMode.Async, 'INSERT INTO TABLE_VERSION (______tableName, ______version ) VALUES ( ?, ? )', [option!.tableName, lastVersion]);
-                        }
-                    } else { // 表不存在
-                        // 创建表
+                        const rtable = `${option!.tableName}_${tableVersion.replace(/\./, '_')}`;
+                        await option!.conn!.execute(SyncMode.Async, `DROP TABLE IF EXISTS ${rtable};`);
+                        await option!.conn!.execute(SyncMode.Async, `ALTER TABLE ${tableES} RENAME TO ${rtable};`);
                         await option!.conn!.execute(SyncMode.Async, `
                         CREATE TABLE IF NOT EXISTS ${tableES}(
                             ${Object.values(this[_fields]!).map(K => K[DBType.Sqlite]()).join(',')}
@@ -3986,16 +3938,32 @@ export class SqlService<T extends object> {
                     `);
                         if (this[_index] && this[_index].length) {
                             for (const index of this[_index]) {
-                                await option!.conn!.execute(SyncMode.Async, `CREATE INDEX ${`${index}_${Math.random()}`.replace(/\./, '')} ON ${option!.tableName} ("${this[_fields]![index]?.C2()}");`);
+                                await option!.conn!.execute(SyncMode.Async, `CREATE INDEX ${`${index}_${Math.random()}`.replace(/\./, '')} ON ${tableES} ("${this[_fields]![index]?.C2()}");`);
                             }
                         }
-                        await option!.conn!.execute(SyncMode.Async, 'INSERT OR REPLACE INTO TABLE_VERSION (______tableName, ______version ) VALUES ( ?, ? )', [option!.tableName, lastVersion]);
+                        await option!.conn!.execute(SyncMode.Async, `INSERT INTO ${tableES} (${columns}) SELECT ${columns} FROM ${rtable};`);
+                        await option!.conn!.execute(SyncMode.Async, `DROP TABLE IF EXISTS ${rtable};`);
+                        // 更新完毕，保存版本号
+                        await option!.conn!.execute(SyncMode.Async, 'UPDATE TABLE_VERSION SET ______version = ? WHERE ______tableName = ?', [option!.tableName, lastVersion]);
+                    } else if (!tableVersion) { // 不需要升级情况：没有旧的版本号
+                        await option!.conn!.execute(SyncMode.Async, 'INSERT INTO TABLE_VERSION (______tableName, ______version ) VALUES ( ?, ? )', [option!.tableName, lastVersion]);
                     }
-                    resolve();
-                } catch (error) {
-                    reject(error);
+                } else { // 表不存在
+                    // 创建表
+                    await option!.conn!.execute(SyncMode.Async, `
+                    CREATE TABLE IF NOT EXISTS ${tableES}(
+                        ${Object.values(this[_fields]!).map(K => K[DBType.Sqlite]()).join(',')}
+                        ${this[_ids] && this[_ids].length ? `, PRIMARY KEY (${this[_ids].map(i => this[_fields]![i]?.C2()).join(',')})` : ''}
+                    );
+                `);
+                    if (this[_index] && this[_index].length) {
+                        for (const index of this[_index]) {
+                            await option!.conn!.execute(SyncMode.Async, `CREATE INDEX ${`${index}_${Math.random()}`.replace(/\./, '')} ON ${option!.tableName} ("${this[_fields]![index]?.C2()}");`);
+                        }
+                    }
+                    await option!.conn!.execute(SyncMode.Async, 'INSERT OR REPLACE INTO TABLE_VERSION (______tableName, ______version ) VALUES ( ?, ? )', [option!.tableName, lastVersion]);
                 }
-            });
+            })();
         }
     }
 
@@ -4797,32 +4765,28 @@ class StreamQuery<T extends object> {
             });
             return result;
         } else {
-            return new Promise<PageQuery<L>>(async (resolve, reject) => {
-                try {
-                    result.total = await this._service.select<number>({
-                        ...option,
-                        params,
-                        sql: sqlCount,
-                        sync: SyncMode.Async,
-                        selectResult: SelectResult.R_C_Assert
-                    });
-                    result.size = calc(result.total)
-                        .add(this._pageSize - 1)
-                        .div(this._pageSize)
-                        .round(0, 2)
-                        .over();
-                    result.records = await this._service.select<L>({
-                        ...option,
-                        params,
-                        sql,
-                        sync: SyncMode.Async,
-                        selectResult: SelectResult.RS_CS
-                    });
-                    resolve(result);
-                } catch (error) {
-                    reject(error);
-                }
-            });
+            return (async (): Promise<PageQuery<L>> => {
+                result.total = await this._service.select<number>({
+                    ...option,
+                    params,
+                    sql: sqlCount,
+                    sync: SyncMode.Async,
+                    selectResult: SelectResult.R_C_Assert
+                });
+                result.size = calc(result.total)
+                    .add(this._pageSize - 1)
+                    .div(this._pageSize)
+                    .round(0, 2)
+                    .over();
+                result.records = await this._service.select<L>({
+                    ...option,
+                    params,
+                    sql,
+                    sync: SyncMode.Async,
+                    selectResult: SelectResult.RS_CS
+                });
+                return result;
+            })();
         }
     }
     excuteUpdate(option?: MethodOption & { sync?: SyncMode.Async; skipUndefined?: boolean; skipNull?: boolean; skipEmptyString?: boolean; }): Promise<number>;
@@ -5248,33 +5212,45 @@ export function getRedisDB<T = any>(db?: string): T {
     return rd as T;
 }
 /**
- redlock
+ redlock —— 用 redlock 做一把元锁（[lockex]key），把"读 count、判断 count、incr"做成原子操作。
+ 原实现失败时 `return await GetRedisLock(...)` 递归调用自己，redis 长时间不可用会栈溢出；
+ 改成循环 + 指数退避 + 最大重试上限，达到上限后抛出（让上层决定是否走降级路径）。
  */
-export async function GetRedisLock(key: string, lockMaxActive?: number) {
+const GET_REDIS_LOCK_MAX_RETRIES = 10;
+const GET_REDIS_LOCK_BASE_DELAY = 50;  // 毫秒
+export async function GetRedisLock(key: string, lockMaxActive?: number): Promise<boolean> {
     const lock = globalThis[_dao][DBType.RedisLock];
     Throw.if(!lock, 'not found lock!');
     const db = getRedisDB();
-    let initLock: any;
-    try {
-        initLock = await lock.acquire([`[lockex]${key}`], 5000);
-        const count = await db.get(key);
-        if (count === null || parseInt(count) < (lockMaxActive ?? 1)) {
-            await db.incr(key);
-            return true;
-        } else {
-            return false;
-        }
-    } catch (er: any) {
-        return await GetRedisLock(key, lockMaxActive);
-    } finally {
-        if (initLock) {
-            try {
-                await initLock.release();
-                // eslint-disable-next-line no-empty
-            } catch (error: any) {
+    let lastError: any;
+    for (let attempt = 0; attempt < GET_REDIS_LOCK_MAX_RETRIES; attempt++) {
+        let initLock: any;
+        try {
+            initLock = await lock.acquire([`[lockex]${key}`], 5000);
+            const count = await db.get(key);
+            if (count === null || parseInt(count) < (lockMaxActive ?? 1)) {
+                await db.incr(key);
+                return true;
+            } else {
+                return false;
+            }
+        } catch (er: any) {
+            lastError = er;
+            // 指数退避，避免 redis 抖动时打死服务
+            const delay = Math.min(GET_REDIS_LOCK_BASE_DELAY * Math.pow(2, attempt), 1000);
+            (globalThis[_LoggerService]! as LoggerService).debug?.(`GetRedisLock ${key} attempt ${attempt + 1} failed: ${er?.message}, retry after ${delay}ms`);
+            await sleep(delay);
+        } finally {
+            if (initLock) {
+                try {
+                    await initLock.release();
+                    // eslint-disable-next-line no-empty
+                } catch (error: any) {
+                }
             }
         }
     }
+    throw new Error(`GetRedisLock ${key} failed after ${GET_REDIS_LOCK_MAX_RETRIES} retries: ${lastError?.message ?? lastError}`);
 };
 /** 对FN加锁、缓存执行 */
 export async function excuteWithLock<T>(config: {
@@ -5293,7 +5269,7 @@ export async function excuteWithLock<T>(config: {
     /** 单个锁多少【毫秒】后自动释放?默认：60*1000MS  */
     lockMaxTime?: number;
 }, fn__: () => Promise<T>): Promise<T> {
-    const key = (config as any).key_real ? `[lock]${(config as any).key_real}` : `[lock]${typeof config.key === 'function' ? config.key() : config.key}`;
+    const key = `[lock]${typeof config.key === 'function' ? config.key() : config.key}`;
     const db = getRedisDB();
     let wait_time = 0;
     const fn = async () => {
@@ -5321,7 +5297,12 @@ export async function excuteWithLock<T>(config: {
     };
     return await fn();
 }
-/** 与缓存共用时，需要在缓存之前:有缓存则返回缓存,否则加锁执行并缓存,后续队列全部返回缓存,跳过执行 */
+/**
+ * 方法加锁装饰器。
+ * 与 `MethodCache` 组合时，**不要**手工叠装饰器——`MethodCache` 内部已经实现了
+ * "先查缓存 → miss 才加锁 → 锁内二次检查 → 仍 miss 才执行" 的 single-flight 语义，
+ * 直接给方法加 `@MethodCache` 即可。`@MethodLock` 单独使用时仅做并发互斥，不感知缓存。
+ */
 export function MethodLock<T = any>(config: {
     /** 返回缓存key,参数=方法的参数[注意：必须和主方法的参数数量、完全一致，同时会追加一个当前用户对象]+当前用户对象，可以用来清空缓存。 */
     key: ((this: T, ...args: any[]) => string) | string;
@@ -5341,8 +5322,11 @@ export function MethodLock<T = any>(config: {
     return function (target: T, _propertyKey: string, descriptor: PropertyDescriptor) {
         const fn__ = descriptor.value;
         descriptor.value = async function (this: any, ...args: any[]) {
-            (config as any).key_real = typeof config.key === 'function' ? config.key.call(target, ...args) : config.key;
-            return await excuteWithLock(config, async () => await fn__.call(this, ...args));
+            // 注意：装饰器闭包里的 `config` 是所有调用共享的同一个对象，
+            // 不能把 per-call 的状态写回去——必须每次构造一份新的 config 传给 excuteWithLock。
+            const resolvedKey = typeof config.key === 'function' ? config.key.call(this, ...args) : config.key;
+            const perCallConfig = { ...config, key: resolvedKey };
+            return await excuteWithLock(perCallConfig, async () => await fn__.call(this, ...args));
         };
     };
 }
@@ -5353,34 +5337,60 @@ async function setMethodCache(
         clearKey?: string[];
         /** 自动清空缓存的时间，单位分钟 */
         autoClearTime?: number;
+        /** 是否缓存 null / undefined（负缓存），用于防穿透。默认 false，保持旧行为。 */
+        cacheNullValue?: boolean;
+        /** 负缓存 TTL（分钟）。默认沿用 autoClearTime；都不设时不写入。 */
+        nullCacheTime?: number;
         result: any;
     },
     devid?: string | false | undefined
 ) {
     const db = getRedisDB();
-    if (config.result !== null && config.result !== undefined) {
-        // 映射关系存放
-        if (config.clearKey && config.clearKey.length > 0) {
-            for (const clear of config.clearKey) {
-                await db.sadd(`[cache-parent]${clear}`, config.key);
-                await db.sadd(`[cache-child]${config.key}`, clear);
-            }
+    const isNullish = config.result === null || config.result === undefined;
+    // 旧行为：null / undefined 不进缓存；新增 cacheNullValue=true 时写入 'null'（穿透防御）。
+    if (isNullish && !config.cacheNullValue) {
+        return;
+    }
+    // 统一序列化：undefined 不是合法 JSON，归一化成 null。
+    const payload = isNullish ? 'null' : JSON.stringify(config.result);
+    // 负缓存通常用更短 TTL，避免业务恢复后还长时间返回旧的 null。
+    const ttl = isNullish
+        ? (config.nullCacheTime ?? config.autoClearTime)
+        : config.autoClearTime;
+
+    // 映射关系存放（负缓存也参与关联清除，因为外部清缓存的语义不区分正负）
+    if (config.clearKey && config.clearKey.length > 0) {
+        for (const clear of config.clearKey) {
+            await db.sadd(`[cache-parent]${clear}`, config.key);
+            await db.sadd(`[cache-child]${config.key}`, clear);
         }
-        if (config.autoClearTime) { // 自动清空
-            await db.set(`[cache]${config.key}`, JSON.stringify(config.result), 'EX', config.autoClearTime * 60);
-            // 订阅：清空 clear list
-            if (config.clearKey && config.clearKey.length > 0) {
-                globalThis[_EventBus].on(`[cache]${config.key}`, async (key: string) => {
+    }
+    if (ttl) { // 自动清空
+        await db.set(`[cache]${config.key}`, payload, 'EX', ttl * 60);
+        (globalThis[_LoggerService]! as LoggerService).debug?.(`cache ${config.key} seted${isNullish ? ' (null)' : ''}!`);
+        // 订阅：清空 clear list —— 同一 key 在缓存生命周期内只注册一次监听器，
+        // 否则每次 miss 都会 .on 一次，clearMethodCache 触发时回调会被执行 N 遍，
+        // 长期运行造成监听器泄漏。
+        if (config.clearKey && config.clearKey.length > 0) {
+            const event = `[cache]${config.key}`;
+            if (globalThis[_EventBus].listenerCount(event) === 0) {
+                globalThis[_EventBus].on(event, async (key: string) => {
                     await clearChild(key, true);
+                    (globalThis[_LoggerService]! as LoggerService).debug?.(`cache ${key} clear by key!`);
                 });
             }
-        } else {
-            await db.set(`[cache]${config.key}`, JSON.stringify(config.result));
         }
-        if (devid) {
-            // 订阅：清空 clear list
-            globalThis[_EventBus].on(`user-${devid}`, async function (key: string) {
+    } else {
+        await db.set(`[cache]${config.key}`, payload);
+        (globalThis[_LoggerService]! as LoggerService).debug?.(`cache ${config.key} seted${isNullish ? ' (null)' : ''}!`);
+    }
+    if (devid) {
+        // 订阅：清空 clear list —— 同样去重，避免每次 miss 都重复注册。
+        const event = `user-${devid}`;
+        if (globalThis[_EventBus].listenerCount(event) === 0) {
+            globalThis[_EventBus].on(event, async function (key: string) {
                 await clearChild(key);
+                (globalThis[_LoggerService]! as LoggerService).debug?.(`cache ${key} clear by devid!`);
             });
         }
     }
@@ -5425,8 +5435,76 @@ async function clearParent(clearKey: string) {
     }
 }
 /**
+ * 缓存执行的核心：先查缓存 → miss 才加锁 → 锁内二次检查 → 仍 miss 才执行原方法 → 写缓存。
+ * 这样同一 key 的并发 N 个请求里，只会有 1 个真正穿透到 fn，其余等待者在锁内读到刚写入的缓存。
+ * 锁本身有等待超时和锁 TTL 兜底，redis 不可用时 fallback 到无锁直跑（保留可用性，退化为旧行为）。
+ *
+ * 命中判断用 `cached !== null`（ioredis 在 key 不存在时返回 `null`），
+ * 这样 `cacheNullValue=true` 时存进去的字面量 `'null'` 也会算作命中，达到防穿透效果。
+ */
+async function excuteCacheCore<T>(opts: {
+    key: string;
+    clearKey?: string[];
+    autoClearTime?: number;
+    /** 是否缓存 null（负缓存防穿透），默认 false。 */
+    cacheNullValue?: boolean;
+    /** 负缓存 TTL（分钟），默认沿用 autoClearTime。 */
+    nullCacheTime?: number;
+    /** 传给 setMethodCache 的 user devid，用于按用户 session 清缓存 */
+    devid?: string | false | undefined;
+    fn: () => Promise<T>;
+}): Promise<T> {
+    const db = getRedisDB();
+    const cacheKey = `[cache]${opts.key}`;
+    const cached = await db.get(cacheKey);
+    if (cached !== null) {
+        (globalThis[_LoggerService]! as LoggerService).debug?.(`cache ${opts.key} hit!`);
+        return JSON.parse(cached as string);
+    }
+    (globalThis[_LoggerService]! as LoggerService).debug?.(`cache ${opts.key} miss!`);
+
+    const setOpts = {
+        clearKey: opts.clearKey,
+        autoClearTime: opts.autoClearTime,
+        cacheNullValue: opts.cacheNullValue,
+        nullCacheTime: opts.nullCacheTime
+    };
+
+    // 没有 redlock 配置时直接退化为旧行为（无锁直跑）。
+    const lockDao = globalThis[_dao][DBType.RedisLock];
+    if (!lockDao) {
+        const result = await opts.fn();
+        await setMethodCache({ key: opts.key, ...setOpts, result }, opts.devid);
+        return result;
+    }
+
+    return await excuteWithLock(
+        {
+            key: opts.key,
+            // 让等待者尽快读到首飞写入的缓存
+            lockWait: true,
+            lockRetryInterval: 100,
+            // 锁 TTL 给一个相对合理的上限，避免首飞挂掉时其它请求永远卡住
+            lockMaxTime: 30000
+        },
+        async () => {
+            // 锁内二次检查：等待者醒来后必须再读一次缓存，否则会和首飞一样跑一遍原方法。
+            const recheck = await db.get(cacheKey);
+            if (recheck !== null) {
+                (globalThis[_LoggerService]! as LoggerService).debug?.(`cache ${opts.key} hit after lock!`);
+                return JSON.parse(recheck as string);
+            }
+            const result = await opts.fn();
+            await setMethodCache({ key: opts.key, ...setOpts, result }, opts.devid);
+            return result;
+        }
+    );
+}
+
+/**
  * 执行一个方法fn，
- * 如果有缓存，则返回缓存，否则执行方法并缓存
+ * 如果有缓存，则返回缓存，否则【加锁、二次检查】后执行方法并缓存，防止缓存击穿。
+ * 可选 `cacheNullValue=true` 开启负缓存，防穿透；负缓存默认沿用 autoClearTime，可单独用 nullCacheTime 设短。
  */
 export async function excuteWithCache<T>(config: {
     /** 返回缓存key,参数=方法的参数+当前用户对象，可以用来清空缓存。 */
@@ -5435,28 +5513,28 @@ export async function excuteWithCache<T>(config: {
     clearKey?: string[];
     /** 自动清空缓存的时间，单位分钟 */
     autoClearTime?: number;
+    /** 是否缓存 null / undefined（负缓存防穿透），默认 false。 */
+    cacheNullValue?: boolean;
+    /** 负缓存 TTL（分钟），默认沿用 autoClearTime。 */
+    nullCacheTime?: number;
     /** 随着当前用户sesion的清空而一起清空 */
     clearWithSession?: boolean;
 }, fn: () => Promise<T>): Promise<T> {
-    const db = getRedisDB();
     const key = typeof config.key === 'function' ? config.key() : config.key;
-    const cache = await db.get(`[cache]${key}`);
-    if (cache) {
-        (globalThis[_LoggerService]! as LoggerService).debug?.(`cache ${key} hit!`);
-        return JSON.parse(cache as string);
-    } else {
-        const result = await fn();
-        (globalThis[_LoggerService]! as LoggerService).debug?.(`cache ${key} miss!`);
-        await setMethodCache({
-            key,
-            clearKey: config.clearKey,
-            autoClearTime: config.autoClearTime,
-            result
-        });
-        return result;
-    }
+    return await excuteCacheCore({
+        key,
+        clearKey: config.clearKey,
+        autoClearTime: config.autoClearTime,
+        cacheNullValue: config.cacheNullValue,
+        nullCacheTime: config.nullCacheTime,
+        fn
+    });
 }
-/** 缓存注解 */
+/**
+ * 缓存注解：先查缓存 → miss 才加锁 → 锁内再查一次 → 仍 miss 才执行原方法。
+ * 已内置 single-flight，不需要再叠 `@MethodLock`。
+ * 可选 `cacheNullValue=true` 开启负缓存，防穿透。
+ */
 export function MethodCache<T = any>(config: {
     /** 返回缓存key,参数=方法的参数[注意：必须和主方法的参数数量、完全一致，同时会追加一个当前用户对象]+当前用户对象，可以用来清空缓存。 */
     key: ((this: T, ...args: any[]) => string) | string;
@@ -5464,30 +5542,30 @@ export function MethodCache<T = any>(config: {
     clearKey?: ((this: T, ...args: any[]) => string[]) | string[];
     /** 自动清空缓存的时间，单位分钟 */
     autoClearTime?: number;
+    /** 是否缓存 null / undefined（负缓存防穿透），默认 false。 */
+    cacheNullValue?: boolean;
+    /** 负缓存 TTL（分钟），默认沿用 autoClearTime。 */
+    nullCacheTime?: number;
     /** 随着当前用户sesion的清空而一起清空 */
     clearWithSession?: boolean;
 }) {
-    return function (target: T, _propertyKey: string, descriptor: PropertyDescriptor) {
+    return function (_target: T, _propertyKey: string, descriptor: PropertyDescriptor) {
         const fn = descriptor.value;
         descriptor.value = async function (this: any, ...args: any[]) {
             const key = typeof config.key === 'function' ? config.key.call(this, ...args) : config.key;
-            const db = getRedisDB();
-            const cache = await db.get(`[cache]${key}`);
-            if (cache) {
-                (globalThis[_LoggerService]! as LoggerService).debug?.(`cache ${key} hit!`);
-                return JSON.parse(cache);
-            } else {
-                (globalThis[_LoggerService]! as LoggerService).debug?.(`cache ${key} miss!`);
-                const result = await fn.call(this, ...args);
-                const clearKey = config.clearKey ? typeof config.clearKey === 'function' ? config.clearKey.call(this, ...args) : config.clearKey : undefined;
-                await setMethodCache({
-                    key,
-                    clearKey,
-                    autoClearTime: config.autoClearTime,
-                    result
-                }, config.clearWithSession && this.ctx.me && this.ctx.me.devid);
-                return result;
-            }
+            const clearKey = config.clearKey
+                ? (typeof config.clearKey === 'function' ? config.clearKey.call(this, ...args) : config.clearKey)
+                : undefined;
+            const devid = config.clearWithSession && this.ctx && this.ctx.me && this.ctx.me.devid;
+            return await excuteCacheCore({
+                key,
+                clearKey,
+                autoClearTime: config.autoClearTime,
+                cacheNullValue: config.cacheNullValue,
+                nullCacheTime: config.nullCacheTime,
+                devid,
+                fn: async () => await fn.call(this, ...args)
+            });
         };
     };
 }
@@ -5603,13 +5681,14 @@ class MUParser {
         return sb.join(this.lineSeparator);
     }
 }
-export declare const LOG_LEVELS: ["verbose", "debug", "info", "warn", "error", "fatal"];
+export declare const LOG_LEVELS: ["verbose", "debug", "info","log",  "warn", "error", "fatal"];
 export type LogLevel = (typeof LOG_LEVELS)[number];
 export interface LoggerService {
     /**
      * Write a 'log' level log.
      */
     log(message: any, ...optionalParams: any[]): any;
+    info(message: any, ...optionalParams: any[]): any;
     /**
      * Write an 'error' level log.
      */
@@ -5647,6 +5726,9 @@ export class PrinterLogger implements LoggerService {
         });
     }
     log(message: any, ...optionalParams: any[]) {
+        this.logger.info(message, ...optionalParams);
+    }
+    info(message: any, ...optionalParams: any[]) {
         this.logger.info(message, ...optionalParams);
     }
     fatal(message: any, ...optionalParams: any[]) {

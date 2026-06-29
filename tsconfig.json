@@ -39,6 +39,7 @@
     "lib": ["ESNext"],
     "types": ["node"],
     "skipLibCheck": true,
+    "ignoreDeprecations": "6.0",
     "outDir": "./dist"
   }
 }
