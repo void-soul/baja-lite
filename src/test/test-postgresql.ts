@@ -1,7 +1,8 @@
 import { DBType, Field, SqlType } from 'baja-lite-field';
 import 'reflect-metadata';
-import { Boot } from './boot.js';
-import { ColumnMode, DB, SelectResult, SqlService, } from './sql.js';
+import { Boot } from '../boot.js';
+import { DB, SqlService } from '../db/index.js';
+import { ColumnMode, SelectResult } from '../const/index.js';
 class AmaFuck2 {
     @Field({ type: SqlType.int, length: 200, id: true, uuid: true })
     userid?: number;

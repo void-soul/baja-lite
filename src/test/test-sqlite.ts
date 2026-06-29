@@ -1,7 +1,8 @@
 import { DBType, Field, SqlType } from 'baja-lite-field';
 import 'reflect-metadata';
-import { Boot } from './boot';
-import { DB, DeleteMode, InsertMode, SqlService, SyncMode } from './sql';
+import { Boot } from '../boot';
+import { DB, SqlService } from '../db/index.js';
+import { SyncMode, InsertMode, DeleteMode } from '../const/index.js';
 class AmaFuck {
     @Field({ type: SqlType.varchar })
     site?: string;

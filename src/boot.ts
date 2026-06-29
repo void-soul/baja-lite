@@ -1,6 +1,8 @@
 import { _Hump, DBType, getEnums } from 'baja-lite-field';
 import events from 'events';
-import { _Context, _dao, _DataConvert, _defOption, _enum, _EventBus, _fs, _GlobalSqlOption, _LoggerService, _MysqlKeepAliveTime, _path, _primaryDB, _sqlCache, ColumnMode, GlobalSqlOption, LoggerService, Mysql, Postgresql, PrinterLogger, SqlCache, Sqlite, SqliteRemote } from './sql.js';
+import { _Context, _dao, _DataConvert, _defOption, _enum, _EventBus, _fs, _GlobalSqlOption, _LoggerService, _MysqlKeepAliveTime, _path, _primaryDB, _sqlCache, ColumnMode, GlobalSqlOption } from './const/index.js';
+import { Mysql, Postgresql, SqlCache, Sqlite, SqliteRemote } from './db/index.js';
+import { LoggerService, PrinterLogger } from './logger.js';
 
 export const Boot = async function (options: GlobalSqlOption) {
     globalThis[_GlobalSqlOption] = Object.assign({}, _defOption);
@@ -12,6 +14,9 @@ export const Boot = async function (options: GlobalSqlOption) {
     }
     if (options.maxDeal !== undefined) {
         globalThis[_GlobalSqlOption].maxDeal = options.maxDeal;
+    }
+    if (options.memCacheMaxSize !== undefined) {
+        globalThis[_GlobalSqlOption].memCacheMaxSize = options.memCacheMaxSize;
     }
     if (options.logger) {
         globalThis[_LoggerService] = options.logger;

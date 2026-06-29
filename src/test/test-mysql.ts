@@ -1,7 +1,8 @@
 import { Field, SqlType } from 'baja-lite-field';
 import 'reflect-metadata';
-import { Boot } from './boot.js';
-import { ColumnMode, DB, SelectResult, SqlService } from './sql.js';
+import { Boot } from '../boot.js';
+import { DB, SqlService } from '../db/index.js';
+import { ColumnMode, SelectResult } from '../const/index.js';
 class BaseAuditUser {
     /**
     *
@@ -134,7 +135,7 @@ export async function go2() {
         }
     });
     const service = new BaseAuditUserService();
-    const rt = await service.stream().eq('auditId', '100987125344341382').select('labelName').where('audit_id > 0').excuteSelect({selectResult:SelectResult.R_C_Assert});
+    const rt = await service.stream().eq('auditId', '100987125344341382').select('labelName').where('audit_id > 0').excuteSelect({ selectResult: SelectResult.R_C_Assert });
     console.log(rt);
     // const list = await service.transaction<number>({
     //     fn: async conn => {

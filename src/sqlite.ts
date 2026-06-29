@@ -1,7 +1,9 @@
 import { decode, encode } from "@msgpack/msgpack";
 import Sqlstring from 'sqlstring';
 import { snowflake } from './snowflake.js';
-import { LoggerService, SqliteRemoteInterface, _LoggerService, extensionCodec } from './sql.js';
+import { extensionCodec } from './db/index.js';
+import { LoggerService } from './logger.js';
+import { SqliteRemoteInterface, _LoggerService } from './const/index.js';
 export abstract class SqliteRemoteClass implements SqliteRemoteInterface {
     private dbList: Record<string, any> = {};
     /** 原始存放路径 */
