@@ -39,15 +39,12 @@ export class SqliteRemoteConnection implements Connection {
     execute(sync: SyncMode.Sync, sql?: string, params?: any): { affectedRows: number; insertId: bigint; };
     execute(sync: SyncMode.Async, sql?: string, params?: any): Promise<{ affectedRows: number; insertId: bigint; }>;
     execute(sync: SyncMode, sql?: string, params?: any): { affectedRows: number; insertId: bigint; } | Promise<{ affectedRows: number; insertId: bigint; }> {
-        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
+        (globalThis[_LoggerService]! as any).debugCategory?.('sql', sql, params ?? '');
         if (!sql) { return { affectedRows: 0, insertId: 0n }; };
         if (sync === SyncMode.Sync) {
             (globalThis[_LoggerService]! as LoggerService).warn('SqliteRemote not supported sync mode');
             return { affectedRows: 0, insertId: 0n };
         };
-        if (globalThis[_GlobalSqlOption].log === 'trace') {
-            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
-        }
         return (async (): Promise<{ affectedRows: number; insertId: bigint; }> => {
             try {
                 const data = await this[_daoConnection].execute(encode([this[_sqliteRemoteName], sql, params], { extensionCodec }));
@@ -67,15 +64,12 @@ export class SqliteRemoteConnection implements Connection {
     pluck<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T | null;
     pluck<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T | null>;
     pluck<T = any>(sync: SyncMode, sql?: string, params?: any): T | null | Promise<T | null> {
-        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
+        (globalThis[_LoggerService]! as any).debugCategory?.('sql', sql, params ?? '');
         if (!sql) { return null };
         if (sync === SyncMode.Sync) {
             (globalThis[_LoggerService]! as LoggerService).warn('SqliteRemote not supported sync mode');
             return null;
         };
-        if (globalThis[_GlobalSqlOption].log === 'trace') {
-            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
-        }
         return (async (): Promise<T | null> => {
             try {
                 const data = await this[_daoConnection].pluck(encode([this[_sqliteRemoteName], sql, params], { extensionCodec }));
@@ -94,15 +88,12 @@ export class SqliteRemoteConnection implements Connection {
     get<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T | null;
     get<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T | null>;
     get<T = any>(sync: SyncMode, sql?: string, params?: any): T | null | Promise<T | null> {
-        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
+        (globalThis[_LoggerService]! as any).debugCategory?.('sql', sql, params ?? '');
         if (!sql) { return null };
         if (sync === SyncMode.Sync) {
             (globalThis[_LoggerService]! as LoggerService).warn('SqliteRemote not supported sync mode');
             return null;
         };
-        if (globalThis[_GlobalSqlOption].log === 'trace') {
-            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
-        }
         return (async (): Promise<T | null> => {
             try {
                 const data = await this[_daoConnection].get(encode([this[_sqliteRemoteName], sql, params], { extensionCodec }));
@@ -121,15 +112,12 @@ export class SqliteRemoteConnection implements Connection {
     raw<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T[];
     raw<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T[]>;
     raw<T = any>(sync: SyncMode, sql?: string, params?: any): T[] | Promise<T[]> {
-        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
+        (globalThis[_LoggerService]! as any).debugCategory?.('sql', sql, params ?? '');
         if (!sql) { return []; };
         if (sync === SyncMode.Sync) {
             (globalThis[_LoggerService]! as LoggerService).warn('SqliteRemote not supported sync mode');
             return [];
         };
-        if (globalThis[_GlobalSqlOption].log === 'trace') {
-            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
-        }
         return (async (): Promise<T[]> => {
             try {
                 const data = await this[_daoConnection].raw(encode([this[_sqliteRemoteName], sql, params], { extensionCodec }));
@@ -148,15 +136,12 @@ export class SqliteRemoteConnection implements Connection {
     query<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T[];
     query<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T[]>;
     query<T = any>(sync: SyncMode, sql?: string, params?: any): T[] | Promise<T[]> {
-        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
+        (globalThis[_LoggerService]! as any).debugCategory?.('sql', sql, params ?? '');
         if (!sql) { return []; };
         if (sync === SyncMode.Sync) {
             (globalThis[_LoggerService]! as LoggerService).warn('SqliteRemote not supported sync mode');
             return [];
         };
-        if (globalThis[_GlobalSqlOption].log === 'trace') {
-            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
-        }
         return (async (): Promise<T[]> => {
             try {
                 const data = await this[_daoConnection].query(encode([this[_sqliteRemoteName], sql, params], { extensionCodec }));

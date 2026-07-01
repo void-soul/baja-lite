@@ -14,19 +14,13 @@ export class SqliteConnection implements Connection {
     execute(sync: SyncMode.Async, sql?: string, params?: any): Promise<{ affectedRows: number; insertId: bigint; }>;
     execute(sync: SyncMode, sql?: string, params?: any): { affectedRows: number; insertId: bigint; } | Promise<{ affectedRows: number; insertId: bigint; }> {
         try {
-            (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
+            (globalThis[_LoggerService]! as any).debugCategory?.('sql', sql, params ?? '');
             if (!sql) { return { affectedRows: 0, insertId: 0n }; };
             if (sync === SyncMode.Async) {
                 (globalThis[_LoggerService]! as LoggerService).warn(`SQLITE not supported async mode`);
                 return { affectedRows: 0, insertId: 0n };
             };
-            if (globalThis[_GlobalSqlOption].log === 'trace') {
-                (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
-            }
             const result = this[_daoConnection].prepare(sql).run(params ?? {});
-            if (globalThis[_GlobalSqlOption].log === 'trace') {
-                (globalThis[_LoggerService]! as LoggerService).verbose?.(result);
-            }
             const { changes, lastInsertRowid } = result;
             return { affectedRows: changes, insertId: lastInsertRowid ? BigInt(lastInsertRowid) : 0n };
         } catch (error) {
@@ -43,15 +37,12 @@ export class SqliteConnection implements Connection {
     pluck<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T | null>;
     pluck<T = any>(sync: SyncMode, sql?: string, params?: any): T | null | Promise<T | null> {
         try {
-            (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
+            (globalThis[_LoggerService]! as any).debugCategory?.('sql', sql, params ?? '');
             if (!sql) { return null };
             if (sync === SyncMode.Async) {
                 (globalThis[_LoggerService]! as LoggerService).warn(`SQLITE not supported async mode`);
                 return null;
             };
-            if (globalThis[_GlobalSqlOption].log === 'trace') {
-                (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
-            }
             return this[_daoConnection].prepare(sql).pluck().get(params ?? {});
         } catch (error) {
             (globalThis[_LoggerService]! as LoggerService).error(`
@@ -67,12 +58,9 @@ export class SqliteConnection implements Connection {
     get<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T | null>;
     get<T = any>(sync: SyncMode, sql?: string, params?: any): T | null | Promise<T | null> {
         try {
-            (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
+            (globalThis[_LoggerService]! as any).debugCategory?.('sql', sql, params ?? '');
             if (!sql) { return null };
             if (sync === SyncMode.Async) { return null };
-            if (globalThis[_GlobalSqlOption].log === 'trace') {
-                (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
-            }
             return this[_daoConnection].prepare(sql).get(params ?? {});
         } catch (error) {
             (globalThis[_LoggerService]! as LoggerService).error(`
@@ -88,15 +76,12 @@ export class SqliteConnection implements Connection {
     raw<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T[]>;
     raw<T = any>(sync: SyncMode, sql?: string, params?: any): T[] | Promise<T[]> {
         try {
-            (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
+            (globalThis[_LoggerService]! as any).debugCategory?.('sql', sql, params ?? '');
             if (!sql) { return []; };
             if (sync === SyncMode.Async) {
                 (globalThis[_LoggerService]! as LoggerService).warn(`SQLITE not supported async mode`);
                 return [];
             };
-            if (globalThis[_GlobalSqlOption].log === 'trace') {
-                (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
-            }
             return this[_daoConnection].prepare(sql).raw().all(params ?? {});
         } catch (error) {
             (globalThis[_LoggerService]! as LoggerService).error(`
@@ -112,15 +97,12 @@ export class SqliteConnection implements Connection {
     query<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T[]>;
     query<T = any>(sync: SyncMode, sql?: string, params?: any): T[] | Promise<T[]> {
         try {
-            (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
+            (globalThis[_LoggerService]! as any).debugCategory?.('sql', sql, params ?? '');
             if (!sql) { return []; };
             if (sync === SyncMode.Async) {
                 (globalThis[_LoggerService]! as LoggerService).warn(`SQLITE not supported async mode`);
                 return [];
             };
-            if (globalThis[_GlobalSqlOption].log === 'trace') {
-                (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
-            }
             return this[_daoConnection].prepare(sql).all(params ?? {});
         } catch (error) {
             (globalThis[_LoggerService]! as LoggerService).error(`

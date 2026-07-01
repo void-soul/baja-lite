@@ -12,22 +12,16 @@ export class MysqlConnection implements Connection {
     execute(sync: SyncMode.Sync, sql?: string, params?: any): { affectedRows: number; insertId: bigint; };
     execute(sync: SyncMode.Async, sql?: string, params?: any): Promise<{ affectedRows: number; insertId: bigint; }>;
     execute(sync: SyncMode, sql?: string, params?: any): { affectedRows: number; insertId: bigint; } | Promise<{ affectedRows: number; insertId: bigint; }> {
-        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
+        (globalThis[_LoggerService]! as any).debugCategory?.('sql', sql, params ?? '');
         if (!sql) { return { affectedRows: 0, insertId: 0n }; };
         if (sync === SyncMode.Sync) {
             (globalThis[_LoggerService]! as LoggerService).warn('MYSQL not supported sync mode');
             return { affectedRows: 0, insertId: 0n };
         };
-        if (globalThis[_GlobalSqlOption].log === 'trace') {
-            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
-        }
         return (async (): Promise<{ affectedRows: number; insertId: bigint; }> => {
             try {
                 const [_result] = await this[_daoConnection].execute(sql, params);
                 const result = _result as any;
-                if (globalThis[_GlobalSqlOption].log === 'trace') {
-                    (globalThis[_LoggerService]! as LoggerService).verbose?.(result);
-                }
                 return { affectedRows: result.affectedRows, insertId: result.insertId };
             } catch (error) {
                 (globalThis[_LoggerService]! as LoggerService).error(error.message, { cause: error });
@@ -39,15 +33,12 @@ export class MysqlConnection implements Connection {
     pluck<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T | null;
     pluck<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T | null>;
     pluck<T = any>(sync: SyncMode, sql?: string, params?: any): T | null | Promise<T | null> {
-        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
+        (globalThis[_LoggerService]! as any).debugCategory?.('sql', sql, params ?? '');
         if (!sql) { return null };
         if (sync === SyncMode.Sync) {
             (globalThis[_LoggerService]! as LoggerService).warn('MYSQL not supported sync mode');
             return null;
         };
-        if (globalThis[_GlobalSqlOption].log === 'trace') {
-            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
-        }
         return (async (): Promise<T | null> => {
             try {
                 const [result] = await this[_daoConnection].query(sql, params);
@@ -70,21 +61,15 @@ export class MysqlConnection implements Connection {
     get<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T | null;
     get<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T | null>;
     get<T = any>(sync: SyncMode, sql?: string, params?: any): T | null | Promise<T | null> {
-        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
+        (globalThis[_LoggerService]! as any).debugCategory?.('sql', sql, params ?? '');
         if (!sql) { return null };
         if (sync === SyncMode.Sync) {
             (globalThis[_LoggerService]! as LoggerService).warn('MYSQL not supported sync mode');
             return null;
         };
-        if (globalThis[_GlobalSqlOption].log === 'trace') {
-            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
-        }
         return (async (): Promise<T | null> => {
             try {
                 const [result] = await this[_daoConnection].query(sql, params);
-                if (globalThis[_GlobalSqlOption].log === 'trace') {
-                    (globalThis[_LoggerService]! as LoggerService).verbose?.(result);
-                }
                 if (result && result[0]) {
                     return result[0] as T;
                 }
@@ -103,21 +88,15 @@ export class MysqlConnection implements Connection {
     raw<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T[];
     raw<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T[]>;
     raw<T = any>(sync: SyncMode, sql?: string, params?: any): T[] | Promise<T[]> {
-        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
+        (globalThis[_LoggerService]! as any).debugCategory?.('sql', sql, params ?? '');
         if (!sql) { return []; };
         if (sync === SyncMode.Sync) {
             (globalThis[_LoggerService]! as LoggerService).warn('MYSQL not supported sync mode');
             return [];
         };
-        if (globalThis[_GlobalSqlOption].log === 'trace') {
-            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
-        }
         return (async (): Promise<T[]> => {
             try {
                 const [result] = await this[_daoConnection].query(sql, params);
-                if (globalThis[_GlobalSqlOption].log === 'trace') {
-                    (globalThis[_LoggerService]! as LoggerService).verbose?.(result);
-                }
                 // 修复 fall-through：原代码 `if (result) resolve(...); resolve([])` 第二行
                 // 是 no-op，但写法埋雷。
                 if (result) {
@@ -138,21 +117,15 @@ export class MysqlConnection implements Connection {
     query<T = any>(sync: SyncMode.Sync, sql?: string, params?: any): T[];
     query<T = any>(sync: SyncMode.Async, sql?: string, params?: any): Promise<T[]>;
     query<T = any>(sync: SyncMode, sql?: string, params?: any): T[] | Promise<T[]> {
-        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
+        (globalThis[_LoggerService]! as any).debugCategory?.('sql', sql, params ?? '');
         if (!sql) { return []; };
         if (sync === SyncMode.Sync) {
             (globalThis[_LoggerService]! as LoggerService).warn('MYSQL not supported sync mode');
             return [];
         };
-        if (globalThis[_GlobalSqlOption].log === 'trace') {
-            (globalThis[_LoggerService]! as LoggerService).verbose?.(`${sql}\n,${JSON.stringify(params ?? '')}`);
-        }
         return (async (): Promise<T[]> => {
             try {
                 const [result] = await this[_daoConnection].query(sql, params);
-                if (globalThis[_GlobalSqlOption].log === 'trace') {
-                    (globalThis[_LoggerService]! as LoggerService).verbose?.(result);
-                }
                 return result;
             } catch (error) {
                 (globalThis[_LoggerService]! as LoggerService).error(`
@@ -193,7 +166,7 @@ export class Mysql implements Dao {
             connection = await this.createConnection(SyncMode.Async);
             if (connection) {
                 await connection.query(SyncMode.Async, 'SELECT 1 FROM DUAL');
-                // (globalThis[_LoggerService]! as LoggerService).debug?.('keepAlive->', data?.[0]?.[1]);
+                // (globalThis[_LoggerService]! as any).debugCategory?.('sql', 'keepAlive->', data?.[0]?.[1]);
             }
         } catch (error) {
             (globalThis[_LoggerService]! as LoggerService).error('keepAlive error', error);
@@ -217,7 +190,7 @@ export class Mysql implements Dao {
         return (async (): Promise<Connection> => {
             try {
                 const connection = await this[_daoDB].getConnection();
-                (globalThis[_LoggerService]! as LoggerService).debug?.('create new connection!');
+                (globalThis[_LoggerService]! as any).debugCategory?.('sql', 'create new connection!');
                 return new MysqlConnection(connection);
             } catch (error) {
                 (globalThis[_LoggerService]! as LoggerService).error(error.message, { cause: error });
@@ -242,24 +215,24 @@ export class Mysql implements Dao {
             }
             if (conn?.[_inTransaction] !== true) {
                 needCommit = true;
-                (globalThis[_LoggerService]! as LoggerService).debug?.('beginTransaction begin!');
+                (globalThis[_LoggerService]! as any).debugCategory?.('sql', 'beginTransaction begin!');
                 await conn![_daoConnection].beginTransaction();
-                (globalThis[_LoggerService]! as LoggerService).debug?.('beginTransaction end!');
+                (globalThis[_LoggerService]! as any).debugCategory?.('sql', 'beginTransaction end!');
             }
             conn![_inTransaction] = true;
             try {
                 const result = await fn(conn!);
                 if (needCommit) {
-                    (globalThis[_LoggerService]! as LoggerService).debug?.('commit begin!');
+                    (globalThis[_LoggerService]! as any).debugCategory?.('sql', 'commit begin!');
                     await conn![_daoConnection].commit();
-                    (globalThis[_LoggerService]! as LoggerService).debug?.('commit end!');
+                    (globalThis[_LoggerService]! as any).debugCategory?.('sql', 'commit end!');
                 }
                 return result;
             } catch (error) {
                 if (needCommit) {
-                    (globalThis[_LoggerService]! as LoggerService).debug?.('rollback begin!');
+                    (globalThis[_LoggerService]! as any).debugCategory?.('sql', 'rollback begin!');
                     await conn![_daoConnection].rollback();
-                    (globalThis[_LoggerService]! as LoggerService).debug?.('rollback end!');
+                    (globalThis[_LoggerService]! as any).debugCategory?.('sql', 'rollback end!');
                 }
                 (globalThis[_LoggerService]! as LoggerService).error(error.message, { cause: error });
                 throw error;
@@ -269,9 +242,9 @@ export class Mysql implements Dao {
                         conn![_inTransaction] = false;
                     }
                     if (newConn) {
-                        (globalThis[_LoggerService]! as LoggerService).debug?.('release begin!');
+                        (globalThis[_LoggerService]! as any).debugCategory?.('sql', 'release begin!');
                         conn![_daoConnection].release();
-                        (globalThis[_LoggerService]! as LoggerService).debug?.('release end!');
+                        (globalThis[_LoggerService]! as any).debugCategory?.('sql', 'release end!');
                     }
                 } catch (error) {
                     // 释放连接失败通常不影响业务逻辑，记录日志即可

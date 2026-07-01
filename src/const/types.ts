@@ -249,7 +249,23 @@ export interface GlobalSqlOptionForWeb {
         /** 远程SQLITE接口实现，适用于Electron, 采用Ipc 的handel机制实现 */
         service: SqliteRemoteInterface
     },
-    /** 日志等级 */
+    /**
+     * 日志等级。
+     * - 标准等级: 'verbose' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'
+     * - 分类等级: 'sql' (SQL语句) | 'cache' (缓存debug)
+     *
+     * @example
+     * ```ts
+     * // 只看SQL
+     * log: ['sql']
+     * // 只看缓存
+     * log: ['cache']
+     * // SQL + 缓存
+     * log: ['sql', 'cache']
+     * // 所有debug（含sql/cache）
+     * log: ['debug']
+     * ```
+     */
     log?: LogLevel[] | LogLevel,
     /**
      作用与sqlDir类似，不同在于sqlMap`不需要`目录，而是直接指定一个sqlModel对象，对象的格式和sqlDir的文件内容一样。

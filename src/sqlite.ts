@@ -27,7 +27,7 @@ export abstract class SqliteRemoteClass implements SqliteRemoteInterface {
     abstract trace: boolean;
     async execute(inData: Uint8Array): Promise<Uint8Array> {
         const [dbName, sql, params] = decode(inData) as [dbName: string, sql?: string | undefined, params?: any];
-        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
+        (globalThis[_LoggerService]! as any).debugCategory?.('sql', sql ?? '', params ?? '');
         try {
             if (!sql) { return encode({ affectedRows: 0, insertId: 0n }, { extensionCodec }); };
             if (this.trace) {
@@ -50,9 +50,9 @@ export abstract class SqliteRemoteClass implements SqliteRemoteInterface {
     }
     async pluck(inData: Uint8Array): Promise<Uint8Array> {
         const [dbName, sql, params] = decode(inData) as [dbName: string, sql?: string | undefined, params?: any];
-        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
+        (globalThis[_LoggerService]! as any).debugCategory?.('sql', sql ?? '', params ?? '');
         try {
-            (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
+            (globalThis[_LoggerService]! as any).debugCategory?.('sql', sql ?? '', params ?? '');
             if (!sql) { return encode(null) };
             (globalThis[_LoggerService]! as LoggerService).verbose?.(Sqlstring.format(sql!, params));
             return encode(this.dbList[dbName].prepare(sql).pluck().get(params ?? {}), { extensionCodec });
@@ -67,7 +67,7 @@ export abstract class SqliteRemoteClass implements SqliteRemoteInterface {
     }
     async get(inData: Uint8Array): Promise<Uint8Array> {
         const [dbName, sql, params] = decode(inData) as [dbName: string, sql?: string | undefined, params?: any];
-        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
+        (globalThis[_LoggerService]! as any).debugCategory?.('sql', sql ?? '', params ?? '');
         try {
             if (this.trace) {
                 (globalThis[_LoggerService]! as LoggerService).verbose?.(Sqlstring.format(sql!, params));
@@ -84,7 +84,7 @@ export abstract class SqliteRemoteClass implements SqliteRemoteInterface {
     }
     async raw(inData: Uint8Array): Promise<Uint8Array> {
         const [dbName, sql, params] = decode(inData) as [dbName: string, sql?: string | undefined, params?: any];
-        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
+        (globalThis[_LoggerService]! as any).debugCategory?.('sql', sql ?? '', params ?? '');
         try {
             if (!sql) { return encode([]); };
             if (this.trace) {
@@ -102,7 +102,7 @@ export abstract class SqliteRemoteClass implements SqliteRemoteInterface {
     }
     async query(inData: Uint8Array): Promise<Uint8Array> {
         const [dbName, sql, params] = decode(inData) as [dbName: string, sql?: string | undefined, params?: any];
-        (globalThis[_LoggerService]! as LoggerService).debug?.(sql, params ?? '');
+        (globalThis[_LoggerService]! as any).debugCategory?.('sql', sql ?? '', params ?? '');
         try {
             if (!sql) { encode([]); };
             if (this.trace) {

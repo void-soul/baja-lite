@@ -10,7 +10,7 @@ import {
     _resultMap,
     _resultMap_SQLID,
 } from '../const/symbols.js';
-import { LoggerService } from '../logger.js';
+// import { LoggerService } from '../logger.js';
 import {
     MapperIfUndefined,
     SqlMapper,
@@ -404,27 +404,27 @@ export class SqlCache {
                 const name = globalThis[_path].basename(modeName, extname);
                 let ct = 0;
                 if (extname === '.mu') {
-                    (globalThis[_LoggerService]! as LoggerService).debug?.(`sql: ${file} start explain!`);
+                    (globalThis[_LoggerService]! as any).debugCategory?.('sql', `sql: ${file} start explain!`);
                     const parser = new MUParser(rootName || name, globalThis[_fs].readFileSync(file, { encoding: 'utf-8' }).toString());
                     let source = parser.next();
                     while (source != null) {
                         ct++;
                         this.sqlMap[source[0]] = source[1];
-                        (globalThis[_LoggerService]! as LoggerService).debug?.(`sql: ${source[0]} found!`);
+                        (globalThis[_LoggerService]! as any).debugCategory?.('sql', `sql: ${source[0]} found!`);
                         source = parser.next();
                     }
-                    (globalThis[_LoggerService]! as LoggerService).debug?.(`sql: ${file} explain over[${ct}]!`);
+                    (globalThis[_LoggerService]! as any).debugCategory?.('sql', `sql: ${file} explain over[${ct}]!`);
                 } else if (jsMode && extname === '.js') {
-                    (globalThis[_LoggerService]! as LoggerService).debug?.(`sql: ${file} start explain!`);
+                    (globalThis[_LoggerService]! as any).debugCategory?.('sql', `sql: ${file} start explain!`);
                     const obj = (await import(globalThis[_path].join(sqlDir, modeName))).default as _SqlModel;
                     for (const [key, fn] of Object.entries(obj)) {
                         ct++;
 
                         this.sqlMap[`${rootName || name}.${String(key)}`] = fn;
                     }
-                    (globalThis[_LoggerService]! as LoggerService).debug?.(`sql: ${file} explain over[${ct}]!`);
+                    (globalThis[_LoggerService]! as any).debugCategory?.('sql', `sql: ${file} explain over[${ct}]!`);
                 } else if (extname === '.xml') {
-                    (globalThis[_LoggerService]! as LoggerService).debug?.(`sql: ${file} start explain!`);
+                    (globalThis[_LoggerService]! as any).debugCategory?.('sql', `sql: ${file} start explain!`);
                     const root = (HTML.parse(replaceCdata(globalThis[_fs].readFileSync(file, { encoding: 'utf-8' }).toString())) as XML[])[0];
                     if (root) {
                         const mappers = root.children;
@@ -441,14 +441,14 @@ export class SqlCache {
                                             const keys: SqlMapper = [];
                                             this.readResultMap(am.children, keys, []);
                                             globalThis[_resultMap][`${rootName || name}.${am.id}`] = keys;
-                                            (globalThis[_LoggerService]! as LoggerService).debug?.(`sql_resultMap: ${`${rootName || name}.${am.id}`} found!`);
+                                            (globalThis[_LoggerService]! as any).debugCategory?.('sql', `sql_resultMap: ${`${rootName || name}.${am.id}`} found!`);
                                         } else {
                                             this.sqlMap[`${rootName || name}.${am.id!}`] = am.children;
                                             if (am.attrs['resultMap']) {
                                                 globalThis[_resultMap_SQLID][`${rootName || name}.${am.id!}`] = am.attrs['resultMap'];
-                                                (globalThis[_LoggerService]! as LoggerService).debug?.(`sql: autoMapper: ${rootName || name}.${am.id!}-${am.attrs['resultMap']}`);
+                                                (globalThis[_LoggerService]! as any).debugCategory?.('sql', `sql: autoMapper: ${rootName || name}.${am.id!}-${am.attrs['resultMap']}`);
                                             }
-                                            (globalThis[_LoggerService]! as LoggerService).debug?.(`sql: ${rootName || name}.${am.id!} found!`);
+                                            (globalThis[_LoggerService]! as any).debugCategory?.('sql', `sql: ${rootName || name}.${am.id!} found!`);
                                             ct++;
                                         }
                                     }
@@ -456,7 +456,7 @@ export class SqlCache {
                             }
                         }
                     }
-                    (globalThis[_LoggerService]! as LoggerService).debug?.(`sql: ${file} explain over[${ct}]!`);
+                    (globalThis[_LoggerService]! as any).debugCategory?.('sql', `sql: ${file} explain over[${ct}]!`);
                 }
 
             }
