@@ -75,7 +75,7 @@ export class PrinterLogger implements LoggerService {
     }
 
     private _format(level: string, message: any, ...optionalParams: any[]): string {
-        const ts = new Date().toISOString().slice(11, 23);
+        const ts = new Date().toISOString().replace('T', ' ').slice(0, 23);  // 2026-07-02 17:27:27.013
         const prefix = this.options?.prefix ? `[${this.options.prefix}]` : '';
         const params = optionalParams.length
             ? ' ' + optionalParams.map(p => typeof p === 'object' ? JSON.stringify(p) : String(p)).join(' ')
@@ -118,7 +118,7 @@ export class PrinterLogger implements LoggerService {
      */
     debugCategory(category: 'sql' | 'cache', message: any, ...optionalParams: any[]) {
         if (!this.activeLevels.includes(category) && !this.activeLevels.includes('debug')) return;
-        const ts = new Date().toISOString().slice(11, 23);
+        const ts = new Date().toISOString().replace('T', ' ').slice(0, 23);  // 2026-07-02 17:27:27.013
         const params = optionalParams.length
             ? ' ' + optionalParams.map(p => typeof p === 'object' ? JSON.stringify(p) : String(p)).join(' ')
             : '';

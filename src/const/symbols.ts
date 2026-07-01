@@ -60,8 +60,6 @@ export const _GlobalSqlOption = Symbol('GlobalSqlOption');
 export const _EventBus = Symbol('EventBus');
 /** LoggerService 实例，挂在 globalThis */
 export const _LoggerService = Symbol('LoggerService');
-/** 内存缓存 LRU 存储（key → entry），挂在 globalThis */
-export const _memCache = Symbol('memCache');
 /** 内存缓存 single-flight 表（key → in-flight Promise），挂在 globalThis */
 export const _memInflight = Symbol('memInflight');
 /** 延迟加载的 node:path 模块，挂在 globalThis */

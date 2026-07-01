@@ -6,12 +6,10 @@ import {
     _EventBus,
     _GlobalSqlOption,
     _LoggerService,
-    _memCache,
     _memInflight,
     _primaryDB,
 } from './const/symbols.js';
 import { LoggerService } from './logger.js';
-import { StorageType } from './const/index.js';
 
 /** @internal 输出缓存分类日志（仅当 setLogLevels 包含 'cache' 时生效） */
 function cacheLog(message: string, ...params: any[]) {
@@ -243,160 +241,6 @@ export function MethodLock<T = any>(config: {
  * 内存 LRU 条目，存储格式与 Redis 一致（CacheValue）。
  * `expiresAt = 0` 表示永不过期。
  */
-interface MemCacheEntry {
-    /** 缓存值信息（与 Redis 端 CacheValue 格式一致） */
-    cache: CacheValue;
-    /** 毫秒时间戳。0 表示永不过期。 */
-    expiresAt: number;
-}
-
-/** @internal 从 MemCacheEntry 获取实际数据（解析 JSON） */
-function memGetValue(entry: MemCacheEntry): any {
-    return JSON.parse(entry.cache.d);
-}
-
-/** @internal 判断 MemCacheEntry 是否处于 stale 窗口 */
-function memIsStale(entry: MemCacheEntry): boolean {
-    return entry.cache.s === 1;
-}
-
-/** 全局 LRU 上限。可在 boot 时通过 `globalThis[_GlobalSqlOption].memCacheMaxSize` 覆盖。 */
-const MEMORY_CACHE_DEFAULT_MAX_SIZE = 10_000;
-
-function getMemCache(): Map<string, MemCacheEntry> {
-    let m = globalThis[_memCache] as Map<string, MemCacheEntry> | undefined;
-    if (!m) {
-        m = new Map();
-        globalThis[_memCache] = m;
-    }
-    return m;
-}
-function getMemInflight(): Map<string, Promise<any>> {
-    let m = globalThis[_memInflight] as Map<string, Promise<any>> | undefined;
-    if (!m) {
-        m = new Map();
-        globalThis[_memInflight] = m;
-    }
-    return m;
-}
-function getMemCacheMaxSize(): number {
-    return (globalThis[_GlobalSqlOption]?.memCacheMaxSize as number | undefined) ?? MEMORY_CACHE_DEFAULT_MAX_SIZE;
-}
-
-/** 内存侧的 stale-allowed 注册表，对应 redis 的 [cache-stale-allowed] set。
- *  记录哪些缓存 key 启用了 StaleWhileRevalidate，供 clearMethodCache 查表。 */
-const memStaleAllowed = new Set<string>();
-
-/** 内存版的 parent→children 关联表，对应 redis 的 [cache-parent]* / [cache-child]* set。 */
-const memParentChild = {
-    parentToChildren: new Map<string, Set<string>>(),
-    childToParents: new Map<string, Set<string>>(),
-    link(parents: string[], child: string) {
-        for (const p of parents) {
-            let s = this.parentToChildren.get(p);
-            if (!s) { s = new Set(); this.parentToChildren.set(p, s); }
-            s.add(child);
-            let r = this.childToParents.get(child);
-            if (!r) { r = new Set(); this.childToParents.set(child, r); }
-            r.add(p);
-        }
-    },
-    unlinkChild(child: string) {
-        const parents = this.childToParents.get(child);
-        if (!parents) return;
-        for (const p of parents) {
-            this.parentToChildren.get(p)?.delete(child);
-        }
-        this.childToParents.delete(child);
-    },
-    drainParent(parent: string): string[] {
-        const children = this.parentToChildren.get(parent);
-        if (!children) return [];
-        const list = [...children];
-        for (const c of list) {
-            this.childToParents.get(c)?.delete(parent);
-        }
-        this.parentToChildren.delete(parent);
-        return list;
-    }
-};
-
-/**
- * 写一条内存缓存。
- * - 用 Map 的插入顺序天然实现 LRU：先 delete 再 set，把 key 放到尾部；
- *   超过上限时从头部（最少recently used）开始淘汰。
- * - `cacheNullValue=true` 时，null/undefined 也会以 null 形式写入（防穿透）。
- * - 存储格式与 Redis 一致（CacheValue: { t, d, s }）。
- */
-function memSet(
-    key: string,
-    result: any,
-    config: {
-        autoClearTime?: number;
-        cacheNullValue?: boolean;
-        nullCacheTime?: number;
-        clearKey?: string[];
-        /** 清理策略。StaleWhileRevalidate 时注册到 memStaleAllowed，供 clearMethodCache 查表。 */
-        staleMode?: CacheStaleMode;
-    }
-) {
-    const isNullish = result === null || result === undefined;
-    if (isNullish && !config.cacheNullValue) {
-        return;
-    }
-    const ttlMinutes = isNullish ? (config.nullCacheTime ?? config.autoClearTime) : config.autoClearTime;
-    const expiresAt = ttlMinutes ? Date.now() + ttlMinutes * 60_000 : 0;
-    const dataStr = isNullish ? 'null' : JSON.stringify(result);
-    const timestamp = Date.now();
-
-    const cache = getMemCache();
-    const staleAllowed = config.staleMode === CacheStaleMode.StaleWhileRevalidate;
-    const entry: MemCacheEntry = {
-        cache: { t: timestamp, d: dataStr, ...(staleAllowed ? { sa: 1 } : {}) },
-        expiresAt
-    };
-
-    if (cache.has(key)) cache.delete(key);
-    cache.set(key, entry);
-
-    const max = getMemCacheMaxSize();
-    while (cache.size > max) {
-        const oldest = cache.keys().next().value;
-        if (oldest === undefined) break;
-        cache.delete(oldest);
-        memParentChild.unlinkChild(oldest);
-    }
-
-    if (config.clearKey && config.clearKey.length > 0) {
-        memParentChild.link(config.clearKey, key);
-    }
-
-    cacheLog(`memcache ${key} seted t${timestamp}${isNullish ? ' (null)' : ''}!`);
-}
-
-/** 读内存缓存，lazy expire。命中后挪到 LRU 尾部。
- *  stale 窗口内的条目也算命中（`stale: true`），由调用方决定是否触发后台刷新。 */
-function memGet(key: string): { hit: true; value: any; stale: boolean; timestamp: number } | { hit: false } {
-    const cache = getMemCache();
-    const entry = cache.get(key);
-    if (!entry) return { hit: false };
-    // 自然过期
-    if (entry.expiresAt !== 0 && entry.expiresAt <= Date.now()) {
-        cache.delete(key);
-        memParentChild.unlinkChild(key);
-        return { hit: false };
-    }
-    // stale 标志（s=1）且已过期 → 视为 miss
-    if (entry.cache.s === 1 && entry.expiresAt !== 0 && entry.expiresAt <= Date.now()) {
-        cache.delete(key);
-        memParentChild.unlinkChild(key);
-        return { hit: false };
-    }
-    // 命中（新鲜 or stale 窗口内）
-    cache.delete(key);
-    cache.set(key, entry);
-    return { hit: true, value: memGetValue(entry), stale: memIsStale(entry), timestamp: entry.cache.t };
-}
 
 /** 设置方法缓存 */
 async function setMethodCache(
@@ -435,9 +279,11 @@ async function setMethodCache(
             await db.sadd(CacheKey.child(config.key), clear);
         }
     }
-    // 写入缓存值（带时间戳 + staleAllowed 标志）。时间戳用本地时钟，无需读取旧值。
+    // 写入缓存值（带时间戳 + staleAllowed 标志）。
+    // 保留旧 sa：只有显式 StaleWhileRevalidate 才设 1，否则沿用旧值（防止覆盖已有的 sa=1）。
     const timestamp = Date.now();
-    const staleAllowed = config.staleMode === CacheStaleMode.StaleWhileRevalidate;
+    const existingSa = await db.get(CacheKey.value(config.key)).then(r => r ? deserializeCacheValue(r).sa : undefined);
+    const staleAllowed = config.staleMode === CacheStaleMode.StaleWhileRevalidate ? true : (existingSa ?? false);
     const payload = serializeCacheValue(dataStr, timestamp, false, staleAllowed);
     if (ttl) { // 自动清空
         await db.set(CacheKey.value(config.key), payload, 'EX', ttl * 60);
@@ -456,7 +302,7 @@ async function setMethodCache(
         const event = CacheKey.value(config.key);
         if (globalThis[_EventBus].listenerCount(event) === 0) {
             globalThis[_EventBus].on(event, async (key: string) => {
-                await clearCacheKey(key, 30);
+                await clearCacheKey(key);
                 cacheLog(`cache ${key} clear by key!`);
             });
         }
@@ -465,8 +311,8 @@ async function setMethodCache(
         // 订阅：清空 clear list —— 同样去重，避免每次 miss 都重复注册。
         const event = `user-${devid}`;
         if (globalThis[_EventBus].listenerCount(event) === 0) {
-            globalThis[_EventBus].on(event, async function (key: string) {
-                await clearCacheKey(key, 30);
+            globalThis[_EventBus].on(event, async (key: string) => {
+                await clearCacheKey(key);
                 cacheLog(`cache ${key} clear by devid!`);
             });
         }
@@ -474,14 +320,14 @@ async function setMethodCache(
 }
 /**
  * 单个缓存 key 的 stale-or-purge 决策与执行。
- * - stale-allowed（[cache-meta]key 存在）→ 只标记 stale（s=1），保留缓存值（StaleWhileRevalidate）
+ * - CacheValue.sa=1 → 标记 s=1（保留缓存值，StaleWhileRevalidate）
  * - 否则 → 直接删缓存值（Purge）
  *
  * 无论哪种路径，parent↔child 关联关系都清理。
  *
  * @returns 受影响的 children 列表（parent 路径会返回所有被级联清理的 child key）
  */
-async function clearCacheKey(key: string, staleTimeoutSec: number): Promise<string[]> {
+async function clearCacheKey(key: string): Promise<string[]> {
     const db = getRedisDB();
     const affectedChildren: string[] = [];
 
@@ -491,38 +337,33 @@ async function clearCacheKey(key: string, staleTimeoutSec: number): Promise<stri
         const childKeys = await db.smembers(CacheKey.parent(key));
         for (const child of childKeys) {
             cacheLog(`cache ${child} cleared via parent ${key}!`);
-            await clearCacheKey(child, staleTimeoutSec);
+            await clearCacheKey(child);
             affectedChildren.push(child);
         }
         await db.del(CacheKey.parent(key));
     }
 
-    // 2. 判断 stale-allowed：查 [cache-meta]key（带 TTL 的 string）
-    const meta = await db.get(CacheKey.meta(key));
+    // 2. 判断 stale-allowed：查缓存值内部的 sa 标志
+    const valueRaw = await db.get(CacheKey.value(key));
+    const v = valueRaw ? deserializeCacheValue(valueRaw) : null;
 
-    if (meta !== null) {
-        // stale-allowed：保留缓存值，在缓存值内标记 stale（s=1）
-        const valueRaw = await db.get(CacheKey.value(key));
-        if (valueRaw) {
-            const v = deserializeCacheValue(valueRaw);
-            const newPayload = serializeCacheValue(v.d, v.t, true);  // 标记 stale，保留原时间戳
-            // 保留原 TTL：用 TTL 命令查询剩余时间，重新 SET
-            const ttlSec = await db.ttl(CacheKey.value(key));
-            if (ttlSec > 0) {
-                await db.set(CacheKey.value(key), newPayload, 'EX', ttlSec);
-            } else {
-                await db.set(CacheKey.value(key), newPayload);
-            }
-            cacheLog(`cache ${key} marked stale (t${v.t})`);
+    if (v?.sa) {
+        // stale-allowed：保留缓存值，标记 s=1，同时保留 sa=1（防止下次 clear 变成 purge）
+        const newPayload = serializeCacheValue(v.d, v.t, true, true);
+        const ttlSec = await db.ttl(CacheKey.value(key));
+        if (ttlSec > 0) {
+            await db.set(CacheKey.value(key), newPayload, 'EX', ttlSec);
+        } else {
+            await db.set(CacheKey.value(key), newPayload);
         }
-        // 删除 stale meta（已转移到缓存值内）
-        await db.del(CacheKey.meta(key));
+        cacheLog(`cache ${key} marked stale (t${v.t})`);
     } else {
-        // Purge：直接删缓存值 + meta
+        // Purge：直接删缓存值
         await db.del(CacheKey.value(key));
-        await db.del(CacheKey.meta(key));
         cacheLog(`cache ${key} purged!`);
     }
+    // 清理旧格式残留
+    await db.del(CacheKey.meta(key));
 
     // 3. 清理 child→parent 反向关联
     const childType = await db.type(CacheKey.child(key));
@@ -541,60 +382,17 @@ async function clearCacheKey(key: string, staleTimeoutSec: number): Promise<stri
 }
 
 /**
- * 清空方法缓存。同时清 redis 和 memory 两边，业务侧无需关心存储是哪种。
+ * 清空方法缓存。
  * - redis 侧只在配置了 redis 时才操作；没配 redis 时安静跳过，不抛错。
- * - 关联清除（clearKey）在两边都生效。
- * - 被清理的 key 如果启用了 StaleWhileRevalidate，会保留旧值并标记 stale（零阻塞窗口）。
+ * - 关联清除（clearKey）生效。
+ * - 被清理的 key 如果启用了 StaleWhileRevalidate（CacheValue.sa=1），会保留旧值并标记 stale。
  *
- * @param key       要清理的缓存 key 或 parent key
- * @param staleTimeoutSec  stale 窗口秒数（仅对 StaleWhileRevalidate 的 key 生效）。默认 30。
+ * @param key  要清理的缓存 key 或 parent key
  */
-export async function clearMethodCache(key: string, staleTimeoutSec = 30) {
-    // ── 内存侧 ──
-    const cache = getMemCache();
-    const staleExpiresAt = Date.now() + staleTimeoutSec * 1000;
-    const childrenFromParent = memParentChild.drainParent(key);
-    for (const child of childrenFromParent) {
-        if (memStaleAllowed.has(child)) {
-            const childEntry = cache.get(child);
-            if (childEntry) {
-                // 在统一格式内标记 stale（s=1），并限制 stale 窗口不超过 staleTimeoutSec
-                childEntry.cache.s = 1;
-                if (childEntry.expiresAt === 0 || childEntry.expiresAt > staleExpiresAt) {
-                    childEntry.expiresAt = staleExpiresAt;
-                }
-                cache.delete(child);
-                cache.set(child, childEntry);
-                cacheLog(`memcache ${child} marked stale (t${childEntry.cache.t})`);
-            }
-        } else {
-            cache.delete(child);
-            memParentChild.unlinkChild(child);
-            memStaleAllowed.delete(child);
-        }
-    }
-    if (cache.has(key)) {
-        if (memStaleAllowed.has(key)) {
-            const entry = cache.get(key)!;
-            entry.cache.s = 1;
-            if (entry.expiresAt === 0 || entry.expiresAt > staleExpiresAt) {
-                entry.expiresAt = staleExpiresAt;
-            }
-            cache.delete(key);
-            cache.set(key, entry);
-            cacheLog(`memcache ${key} marked stale (t${entry.cache.t})`);
-        } else {
-            cache.delete(key);
-            memParentChild.unlinkChild(key);
-            memStaleAllowed.delete(key);
-        }
-    }
-
-    // ── redis 侧：没配 redis 时跳过 ──
+export async function clearMethodCache(key: string) {
     const redisDao = globalThis[_dao]?.[DBType.Redis]?.[_primaryDB];
     if (!redisDao) return;
-
-    await clearCacheKey(key, staleTimeoutSec);
+    await clearCacheKey(key);
 }
 /**
  * Redis 缓存执行：先查缓存 → miss 后单飞抢锁执行 → 其它等待者只盯缓存、不抢锁。
@@ -607,7 +405,7 @@ export async function clearMethodCache(key: string, staleTimeoutSec = 30) {
  * 命中判断用 `cached !== null`（ioredis 在 key 不存在时返回 `null`），
  * 这样 `cacheNullValue=true` 时存进去的字面量 `'null'` 也会算作命中，达到防穿透效果。
  *
- * 命中时若发现 stale 标记（[cache-stale]key 存在），说明该值是"已被声明过期但保留的旧值"，
+ * 命中时若发现 stale 标志（CacheValue.s=1），说明该值是"已被声明过期但保留的旧值"，
  * 此时仍返回旧值（零阻塞），同时触发后台 single-flight 异步刷新。
  * 这样 clearMethodCache 后的首次读取不会被阻塞，后续读取将命中刷新后的新值。
  *
@@ -629,8 +427,8 @@ interface CacheCoreOpts<T> {
     devid?: string | false | undefined;
     /**
      * 缓存被清理时的行为策略。默认 Purge。
-     * StaleWhileRevalidate 时，setMethodCache 会注册到 stale-allowed set，
-     * 使 clearMethodCache 对该 key 走"标记 stale + 保留旧值"路径。
+     * StaleWhileRevalidate 时，设 sa=1 使 clearMethodCache 对该 key 走"标记 stale + 保留旧值"路径。
+     * 未指定时沿用旧值的 sa（不会清除已有标志）。
      */
     staleMode?: CacheStaleMode;
     /**
@@ -645,7 +443,7 @@ interface CacheCoreOpts<T> {
      * ```ts
      * @MethodCache({
      *     key: ({ deviceId }) => `calibration:${deviceId}`,
-     *     async onCacheUpdated(this: MyService, args, value) {
+     *     async onCacheUpdated(this: MyService, value, args) {
      *         await this.broadcastToClients(args[0], value);
      *     }
      * })
@@ -798,114 +596,9 @@ async function redisCacheCore<T>(opts: CacheCoreOpts<T>): Promise<T> {
     }
 }
 
-/**
- * 内存缓存执行：单进程内的 single-flight 不需要任何分布式协调——
- * JS 单线程 + 同一份 in-flight Map 就够了。同一 key 的并发调用全部 await 同一个 Promise，
- * Promise 解析后所有等待者下个事件循环 tick 并发返回，零序列化、零 redis 往返。
- *
- * 注意：Memory 后端的 stale 标记仅对当前进程可见。PM2 多实例模式下，
- * 实例 A 标记 stale 后，实例 B 看不到该标记，仍会走正常 single-flight。
- * 因此 StaleWhileRevalidate 推荐搭配 Redis 后端使用。
- */
-async function memoryCacheCore<T>(opts: CacheCoreOpts<T>): Promise<T> {
-    const cacheKey = opts.key;
-
-    // 1. 看缓存
-    const hit = memGet(cacheKey);
-    if (hit.hit) {
-        if (hit.stale) {
-            // stale 窗口内：返回旧值 + 触发后台刷新（不阻塞）
-            cacheLog(`memcache ${opts.key} hit (stale)!`);
-            if (!globalStaleInflight.has(opts.key)) {
-                const refreshP = memoryStaleBackgroundRefresh(opts, cacheKey).finally(() => {
-                    globalStaleInflight.delete(opts.key);
-                });
-                globalStaleInflight.set(opts.key, refreshP);
-            }
-        } else {
-            cacheLog(`memcache ${opts.key} hit!`);
-        }
-        return hit.value as T;
-    }
-    cacheLog(`memcache ${opts.key} miss!`);
-
-    // 2. 已有等待中的 Promise → 直接 await，single-flight 自动达成
-    const inflight = getMemInflight();
-    const existing = inflight.get(cacheKey);
-    if (existing) {
-        return await existing as T;
-    }
-
-    // 3. 首飞：把 Promise 提前塞进 inflight，让后到者命中
-    const p = (async () => {
-        try {
-            const result = await opts.fn();
-            memSet(cacheKey, result, {
-                autoClearTime: opts.autoClearTime,
-                cacheNullValue: opts.cacheNullValue,
-                nullCacheTime: opts.nullCacheTime,
-                clearKey: opts.clearKey,
-                staleMode: opts.staleMode
-            });
-            void opts.onCacheUpdated?.call(opts.ctx, result, ...(opts.args ?? []));
-            return result;
-        } finally {
-            inflight.delete(cacheKey);
-        }
-    })();
-    inflight.set(cacheKey, p);
-    return await p as T;
-}
-
-/**
- * 内存后端的后台 stale 刷新：fire-and-forget。
- * 用现有的 inflight Map 做 single-flight —— 只有第一个请求会真正执行 fn()，
- * 后续请求复用同一个 Promise。刷新完成后删除 stale 标记。
- */
-async function memoryStaleBackgroundRefresh<T>(opts: CacheCoreOpts<T>, cacheKey: string): Promise<void> {
-    const inflight = getMemInflight();
-    const inflightKey = `__stale__${cacheKey}`;   // 用独立 key 避免与正常 single-flight 冲突
-    const existing = inflight.get(inflightKey);
-    if (existing) return await existing as Promise<void>;  // 已在刷新，直接等它
-
-    const p = (async () => {
-        try {
-            const result = await opts.fn();
-            memSet(cacheKey, result, {
-                autoClearTime: opts.autoClearTime,
-                cacheNullValue: opts.cacheNullValue,
-                nullCacheTime: opts.nullCacheTime,
-                clearKey: opts.clearKey,
-                staleMode: opts.staleMode
-            });
-            // 清除 stale 标志（s=1 → 删除 s 字段）
-            const cache = getMemCache();
-            const entry = cache.get(cacheKey);
-            if (entry) {
-                delete entry.cache.s;
-                cache.delete(cacheKey);
-                cache.set(cacheKey, entry);
-            }
-            // 调用缓存更新回调（带 ctx）
-            void opts.onCacheUpdated?.call(opts.ctx, result, ...(opts.args ?? []));
-            cacheLog(`memcache ${opts.key} stale background refresh done!`);
-        } catch (error: any) {
-            (globalThis[_LoggerService]! as LoggerService).warn?.(`memcache ${opts.key} stale background refresh failed: ${error?.message}`);
-        } finally {
-            inflight.delete(inflightKey);
-        }
-    })();
-    inflight.set(inflightKey, p);
-    return await p;
-}
-
-/**
- * @internal 内存后端的 strict stale 等待：不返回旧值，等刷新完成后返回新值。
- * 复用 memoryStaleBackgroundRefresh 的 single-flight（基于 inflight Map）。
- * 超时后降级为直接执行 fn()。
- */
-async function excuteCacheCore<T>(opts: CacheCoreOpts<T> & { storage?: StorageType }): Promise<T> {
-    return opts.storage === StorageType.Memory ? await memoryCacheCore(opts) : await redisCacheCore(opts);
+/** @internal 唯一的执行入口（Memory 后端已移除） */
+async function excuteCacheCore<T>(opts: CacheCoreOpts<T>): Promise<T> {
+    return await redisCacheCore(opts);
 }
 
 /**
@@ -919,27 +612,27 @@ export async function excuteWithCache<T>(config: {
     key: ((...args: any[]) => string) | string;
     /** 返回缓存清除key,参数=方法的参数+当前用户对象，可以用来批量清空缓存 */
     clearKey?: string[];
-    /** 自动清空缓存的时间，单位分钟 */
+    /**
+     * 自动清空缓存的时间，单位分钟。
+     * ⚠️ 不能与 `staleMode: StaleWhileRevalidate` 同时使用：
+     * stale 只是把缓存"标记为过期"，旧值仍在；而 autoClearTime 到期后会物理删除 key。
+     * 两者语义冲突——stale 期望保留旧值等后台刷新，autoClearTime 却会直接删掉它。
+     */
     autoClearTime?: number;
     /** 是否缓存 null / undefined（负缓存防穿透），默认 false。 */
     cacheNullValue?: boolean;
-    /** 负缓存 TTL（分钟），默认沿用 autoClearTime。 */
+    /** 负缓存 TTL（分钟）。默认沿用 autoClearTime；都不设时不写入。 */
     nullCacheTime?: number;
-    /** 存储后端：'redis'（默认，跨进程共享）或 'memory'（进程内 LRU，更快但不跨进程）。 */
-    storage?: StorageType;
     /** 随着当前用户sesion的清空而一起清空 */
     clearWithSession?: boolean;
     /**
-     * 缓存被清理时的行为策略。默认 Purge（直接删除，重建时阻塞）。
-     * StaleWhileRevalidate：清理时保留旧值并标记过期，读取时零阻塞返回旧值 + 后台刷新。
-     * 注意：StaleWhileRevalidate 推荐搭配 Redis 后端，Memory 后端在 PM2 多实例下 stale 标记不可跨进程可见。
+     * 缓存被清理时的行为策略。默认 Purge。
+     * StaleWhileRevalidate 时设 sa=1 使 clearMethodCache 走"标记 stale + 保留旧值"路径。
      */
     staleMode?: CacheStaleMode;
-    /** stale 窗口秒数（仅 StaleWhileRevalidate 生效）。默认 30。 */
-    staleTimeout?: number;
     /**
      * 缓存更新回调。异步方法，在 setMethodCache 成功写缓存后调用。
-     * 调用时三个参数：this → 执行上下文（config.ctx）；args → 方法输入参数；value → 缓存值。
+     * 调用时三个参数：this → 方法的执行上下文（config.ctx）；value → 缓存值；args → 方法输入参数。
      */
     onCacheUpdated?: (this: any, value: T, ...args: any[]) => void | Promise<void>;
     /**
@@ -950,7 +643,7 @@ export async function excuteWithCache<T>(config: {
      *     key: 'calibration',
      *     ctx: service,
      *     args: ['device001'],
-     *     onCacheUpdated(this: MyService, args, value) {
+     *     onCacheUpdated(this: MyService, value, args) {
      *         this.broadcast(value);
      *     },
      * }, () => service.getCalibration('device001'));
@@ -970,7 +663,6 @@ export async function excuteWithCache<T>(config: {
         autoClearTime: config.autoClearTime,
         cacheNullValue: config.cacheNullValue,
         nullCacheTime: config.nullCacheTime,
-        storage: config.storage,
         staleMode: config.staleMode,
         onCacheUpdated: config.onCacheUpdated,
         ctx: config.ctx,
@@ -982,7 +674,6 @@ export async function excuteWithCache<T>(config: {
  * 缓存注解：先查缓存 → miss 才加锁 → 锁内再查一次 → 仍 miss 才执行原方法。
  * 已内置 single-flight，不需要再叠 `@MethodLock`。
  * 可选 `cacheNullValue=true` 开启负缓存，防穿透。
- * 可选 `storage: 'memory'` 用进程内 LRU 替代 redis（单进程场景，毫秒级延迟）。
  * 可选 `staleMode: CacheStaleMode.StaleWhileRevalidate` 开启异步重新验证（清理时保留旧值，零阻塞）。
  * 可选 `onCacheUpdated` 设置缓存更新回调（带 this 上下文）。
  */
@@ -991,24 +682,22 @@ export function MethodCache<T = any>(config: {
     key: ((this: T, ...args: any[]) => string) | string;
     /** 返回缓存清除key,参数=方法的参数[注意：必须和主方法的参数数量、完全一致，同时会追加一个当前用户对象]+当前用户对象，可以用来批量清空缓存 */
     clearKey?: ((this: T, ...args: any[]) => string[]) | string[];
-    /** 自动清空缓存的时间，单位分钟 */
+    /**
+     * 自动清空缓存的时间，单位分钟。
+     * ⚠️ 不能与 `staleMode: StaleWhileRevalidate` 同用：stale 仅标记过期，autoClearTime 会物理删除 key，语义冲突。
+     */
     autoClearTime?: number;
     /** 是否缓存 null / undefined（负缓存防穿透），默认 false。 */
     cacheNullValue?: boolean;
     /** 负缓存 TTL（分钟），默认沿用 autoClearTime。 */
     nullCacheTime?: number;
-    /** 存储后端：'redis'（默认，跨进程共享）或 'memory'（进程内 LRU，更快但不跨进程）。 */
-    storage?: StorageType;
     /** 随着当前用户sesion的清空而一起清空 */
     clearWithSession?: boolean;
     /**
-     * 缓存被清理时的行为策略。默认 Purge（直接删除，重建时阻塞）。
-     * StaleWhileRevalidate：清理时保留旧值并标记过期，读取时零阻塞返回旧值 + 后台刷新。
-     * 注意：StaleWhileRevalidate 推荐搭配 Redis 后端，Memory 后端在 PM2 多实例下 stale 标记不可跨进程可见。
+     * 缓存被清理时的行为策略。默认 Purge。
+     * StaleWhileRevalidate 时设 sa=1 使 clearMethodCache 走"标记 stale + 保留旧值"路径。
      */
     staleMode?: CacheStaleMode;
-    /** stale 窗口秒数（仅 StaleWhileRevalidate 生效）。默认 30。 */
-    staleTimeout?: number;
     /**
      * 缓存更新回调。异步方法，在 setMethodCache 成功写缓存后调用。
      * 调用时三个参数：this → 执行上下文；args → 方法输入参数；value → 缓存值。
@@ -1029,7 +718,6 @@ export function MethodCache<T = any>(config: {
                 autoClearTime: config.autoClearTime,
                 cacheNullValue: config.cacheNullValue,
                 nullCacheTime: config.nullCacheTime,
-                storage: config.storage,
                 staleMode: config.staleMode,
                 onCacheUpdated: config.onCacheUpdated,
                 ctx: this,   // 传递当前 this 上下文
@@ -1045,7 +733,7 @@ export function MethodCache<T = any>(config: {
  * 外部直接设置缓存值。用于绕过 @MethodCache 装饰器直接更新缓存的场景
  * （如外部事件驱动的数据变更、手动刷新等）。
  *
- * 内部使用统一格式 { v, d, s } 序列化，确保与 @MethodCache 的读取逻辑兼容。
+ * 内部使用统一格式 { t, d, s, sa } 序列化，确保与 @MethodCache 的读取逻辑兼容。
  *
  * @param cacheKey   缓存 key（不含 [cache] 前缀，与 @MethodCache 的 key 一致）
  * @param value      要缓存的值
@@ -1095,24 +783,15 @@ export async function setCache<T = any>(
     }
     const dataStr = isNullish ? 'null' : JSON.stringify(value);
     const timestamp = Date.now();
-    const payload = serializeCacheValue(dataStr, timestamp);
-
     const db = getRedisDB();
+    // 保留旧 sa：沿用已有标志（防止外部直写清掉 sa=1，导致 clearMethodCache 变 purge）
+    const existingSa = await db.get(CacheKey.value(cacheKey)).then(r => r ? deserializeCacheValue(r).sa : undefined);
+    const payload = serializeCacheValue(dataStr, timestamp, false, !!existingSa);
     if (autoClearTime) {
         await db.set(CacheKey.value(cacheKey), payload, 'EX', autoClearTime * 60);
     } else {
         await db.set(CacheKey.value(cacheKey), payload);
     }
-
-    // 同步更新内存缓存
-    const memCache = getMemCache();
-    const ttlMs = autoClearTime ? autoClearTime * 60_000 : 0;
-    const memEntry: MemCacheEntry = {
-        cache: { t: timestamp, d: dataStr },
-        expiresAt: ttlMs ? Date.now() + ttlMs : 0
-    };
-    if (memCache.has(cacheKey)) memCache.delete(cacheKey);
-    memCache.set(cacheKey, memEntry);
 
     // 触发回调
     void onCacheUpdated?.call(ctx, value, ...args);
