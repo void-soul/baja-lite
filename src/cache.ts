@@ -160,6 +160,8 @@ export async function excuteWithLock<T>(config: {
     lockRetryInterval?: number;
     /** 当设置了lockWait=true时，等待多少【毫秒】即视为超时，放弃本次访问？默认：永不放弃 */
     lockMaxWaitTime?: number;
+    /** 最大重试次数。默认 5。超过后抛出异常。 */
+    lockMaxRetries?: number;
     /** 错误信息 */
     errorMessage?: string;
     /** 允许的并发数，默认：1 */
@@ -169,17 +171,22 @@ export async function excuteWithLock<T>(config: {
 }, fn__: () => Promise<T>): Promise<T> {
     const key = `[lock]${typeof config.key === 'function' ? config.key() : config.key}`;
     const db = getRedisDB();
+    const maxRetries = config.lockMaxRetries ?? 5;
+    let retries = 0;
     let wait_time = 0;
-    const fn = async () => {
+    const fn = async (): Promise<T> => {
         const lock = await GetRedisLock(key, config.lockMaxActive);
         if (lock === false) {
-            if (config.lockWait !== false && ((config.lockMaxWaitTime ?? 0) === 0 || (wait_time + (config.lockRetryInterval ?? 100)) <= (config.lockMaxWaitTime ?? 0))) {
-                (globalThis[_LoggerService]! as any).debugCategory?.('sql', `get lock ${key} fail, retry after ${config.lockRetryInterval ?? 100}ms...`);
+            retries++;
+            const timeOk = (config.lockMaxWaitTime ?? 0) === 0 || (wait_time + (config.lockRetryInterval ?? 100)) <= (config.lockMaxWaitTime ?? 0);
+            const retryOk = retries < maxRetries;
+            if (config.lockWait !== false && timeOk && retryOk) {
+                (globalThis[_LoggerService]! as any).debugCategory?.('sql', `get lock ${key} fail, retry ${retries}/${maxRetries} after ${config.lockRetryInterval ?? 100}ms...`);
                 await sleep(config.lockRetryInterval ?? 100);
                 wait_time += (config.lockRetryInterval ?? 100);
                 return await fn();
             } else {
-                (globalThis[_LoggerService]! as any).debugCategory?.('sql', `get lock ${key} fail`);
+                (globalThis[_LoggerService]! as any).debugCategory?.('sql', `get lock ${key} fail after ${retries} retries`);
                 throw new Error(config.errorMessage || `get lock fail: ${key}`);
             }
         } else {
@@ -210,6 +217,8 @@ export function MethodLock<T = any>(config: {
     lockRetryInterval?: number;
     /** 当设置了lockWait=true时，等待多少【毫秒】即视为超时，放弃本次访问？默认永不放弃 */
     lockMaxWaitTime?: number;
+    /** 最大重试次数。默认 5。超过后抛出异常。 */
+    lockMaxRetries?: number;
     /** 错误信息 */
     errorMessage?: string;
     /** 允许的并发数，默认=1 */
@@ -432,7 +441,7 @@ export async function clearMethodCache(key: string) {
  *
  * redis 不可用或 SETNX 异常时退化为无锁直跑，保留可用性。
  */
-const SINGLEFLIGHT_LOCK_TTL_MS = 30_000;       // 首飞标记 TTL，兜底首飞挂掉的情况
+const SINGLEFLIGHT_LOCK_TTL_MS = 30_000;        // 首飞标记 TTL，兜底首飞挂掉的情况
 const SINGLEFLIGHT_POLL_INTERVAL_MS = 50;       // 等待者轮询缓存的间隔
 const SINGLEFLIGHT_MAX_WAIT_MS = 30_000;        // 等待者最长等多久；超时就自己跑 fn（保底，不应该常发生）
 
@@ -772,12 +781,20 @@ export async function excuteWithCache<T>(config: {
             }
         }
         if (Date.now() - waitStart > SINGLEFLIGHT_MAX_WAIT_MS) {
-            (globalThis[_LoggerService]! as LoggerService).warn?.(`cache ${key}: wait timed out, running fn without lock`);
-            const result = await fn();
-            await setMethodCache({ key, ...setOpts, result }, devid);
-            cacheLog(`${key} force refresh end(recheck)`);
-            void onCacheUpdated?.call(ctx, result, ...callArgs);
-            return result;
+            // 超时后重新抢锁（新一轮领导选举），而非直接跑 fn 导致雪崩
+            const retry = await db.set(sfKey, '1', 'PX', SINGLEFLIGHT_LOCK_TTL_MS, 'NX');
+            if (retry === 'OK') {
+                cacheLog(`${key}: wait timed out, re-elected as leader`);
+                try {
+                    const result = await fn();
+                    await setMethodCache({ key, ...setOpts, result }, devid);
+                    void onCacheUpdated?.call(ctx, result, ...callArgs);
+                    return result;
+                } finally {
+                    try { await db.del(sfKey); } catch { /* TTL 兜底 */ }
+                }
+            }
+            // 没抢到说明又有别人接手了，继续等
         }
     }
 }
