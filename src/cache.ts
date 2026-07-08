@@ -3,13 +3,13 @@ import { sleep } from './fn.js';
 import { Throw } from './error.js';
 import {
     _dao,
-    _EventBus,
     _GlobalSqlOption,
     _LoggerService,
     _memInflight,
     _primaryDB,
 } from './const/symbols.js';
 import { LoggerService } from './logger.js';
+import { on } from './event.js';
 
 /** @internal 输出缓存分类日志（仅当 setLogLevels 包含 'cache' 时生效） */
 function cacheLog(message: string, ...params: any[]) {
@@ -37,10 +37,10 @@ const globalStaleInflight = new Map<string, Promise<any>>();
  * - [cache-parent]key / [cache-child]key   关联清除的 parent↔child 双向 set
  */
 const CacheKey = {
-    value:  (k: string) => `[cache]${k}`,
-    sf:     (k: string) => `[cache-sf]${k}`,
+    value: (k: string) => `[cache]${k}`,
+    sf: (k: string) => `[cache-sf]${k}`,
     parent: (k: string) => `[cache-parent]${k}`,
-    child:  (k: string) => `[cache-child]${k}`,
+    child: (k: string) => `[cache-child]${k}`,
 } as const;
 
 /**
@@ -299,27 +299,13 @@ async function setMethodCache(
     // staleAllowed 已存储在缓存值内部（CacheValue.sa），无需单独的 meta key
     // 删除旧格式残留（兼容升级）
     // await db.del(`[cache-meta]${config.key}`);   // 清理旧格式残留
-    // 订阅：清空 clear list —— 同一 key 在缓存生命周期内只注册一次监听器，
-    // 否则每次 miss 都会 .on 一次，clearMethodCache 触发时回调会被执行 N 遍，
-    // 长期运行造成监听器泄漏。
-    if (config.clearKey && config.clearKey.length > 0) {
-        const event = CacheKey.value(config.key);
-        if (globalThis[_EventBus].listenerCount(event) === 0) {
-            globalThis[_EventBus].on(event, async (key: string) => {
-                await clearCacheKey(key);
-                cacheLog(`${key} clear by key!`);
-            });
-        }
-    }
     if (devid) {
         // 订阅：清空 clear list —— 同样去重，避免每次 miss 都重复注册。
         const event = `user-${devid}`;
-        if (globalThis[_EventBus].listenerCount(event) === 0) {
-            globalThis[_EventBus].on(event, async (key: string) => {
-                await clearCacheKey(key);
-                cacheLog(`${key} clear by devid!`);
-            });
-        }
+        on(event, async (key: string) => {
+            await clearCacheKey(key);
+            cacheLog(`${key} clear by devid!`);
+        }, { unique: true });
     }
 }
 /**
@@ -657,13 +643,33 @@ async function staleBackgroundRefresh<T>(opts: CacheCoreOpts<T>, setOpts: SetMet
  * ```
  */
 export async function excuteWithCache<T>(config: {
+    /** 返回缓存key,参数=方法的参数[注意：必须和主方法的参数数量、完全一致，同时会追加一个当前用户对象]+当前用户对象，可以用来清空缓存。 */
     key: ((...args: any[]) => string) | string;
+    /** 返回缓存清除key,参数=方法的参数[注意：必须和主方法的参数数量、完全一致，同时会追加一个当前用户对象]+当前用户对象，可以用来批量清空缓存 */
     clearKey?: ((...args: any[]) => string[]) | string[];
+    /**
+     * 自动清空缓存的时间，单位分钟。
+     * ⚠️ 不能与 `staleMode: StaleWhileRevalidate` 同用：stale 仅标记过期，autoClearTime 会物理删除 key，语义冲突。
+     */
     autoClearTime?: number;
+    /** 是否缓存 null / undefined（负缓存防穿透），默认 false。 */
     cacheNullValue?: boolean;
+    /** 负缓存 TTL（分钟），默认沿用 autoClearTime。 */
     nullCacheTime?: number;
+    /** 
+     * 随着当前用户sesion的清空而一起清空,需要业务系统配合,用户退出时通过
+     * event 里的 trigger（devid）触发
+     */
     clearWithSession?: boolean;
+    /**
+     * 缓存被清理时的行为策略。默认 Purge。
+     * StaleWhileRevalidate 时设 sa=1 使 clearMethodCache 走"标记 stale + 保留旧值"路径。
+     */
     staleMode?: CacheStaleMode;
+    /**
+     * 缓存更新回调。异步方法，在 setMethodCache 成功写缓存后调用。
+     * 调用时三个参数：this → 执行上下文；args → 方法输入参数；value → 缓存值。
+     */
     onCacheUpdated?: (this: any, value: T, ...args: any[]) => void | Promise<void>;
     ctx?: any;
     args?: any[];
@@ -871,7 +877,10 @@ export function MethodCache<T = any>(config: {
     cacheNullValue?: boolean;
     /** 负缓存 TTL（分钟），默认沿用 autoClearTime。 */
     nullCacheTime?: number;
-    /** 随着当前用户sesion的清空而一起清空 */
+    /** 
+     * 随着当前用户sesion的清空而一起清空,需要业务系统配合,用户退出时通过
+     * event 里的 trigger（devid）触发
+     */
     clearWithSession?: boolean;
     /**
      * 缓存被清理时的行为策略。默认 Purge。

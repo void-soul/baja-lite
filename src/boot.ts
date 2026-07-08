@@ -3,7 +3,7 @@ import events from 'events';
 import { _Context, _dao, _DataConvert, _defOption, _enum, _EventBus, _fs, _GlobalSqlOption, _LoggerService, _MysqlKeepAliveTime, _path, _primaryDB, _sqlCache, ColumnMode, GlobalSqlOption } from './const/index.js';
 import { Mysql, Postgresql, SqlCache, Sqlite, SqliteRemote } from './db/index.js';
 import { LoggerService, PrinterLogger } from './logger.js';
-
+import { initEventSubscriber } from './event.js';
 export const Boot = async function (options: GlobalSqlOption) {
     globalThis[_GlobalSqlOption] = Object.assign({}, _defOption);
     if (options.skipEmptyString !== undefined) {
@@ -162,6 +162,9 @@ export const Boot = async function (options: GlobalSqlOption) {
             (globalThis[_LoggerService]! as LoggerService).error('event-bus', error);
         });
         globalThis[_EventBus] = event;
+
+        // 初始化 Redis 事件跨进程桥接（订阅 [event]* 频道）
+        await initEventSubscriber();
     }
     if (options.Postgresql) {
         const Pool = await import('pg-pool');
