@@ -21,6 +21,7 @@ interface EventBus {
     off(event: string, listener: (...args: any[]) => void): this;
     emit(event: string, ...args: any[]): boolean;
     listenerCount(event: string): number;
+    removeAllListeners(event?: string): this;
 }
 
 /** Redis Pub/Sub 消息载荷 */
@@ -125,7 +126,10 @@ interface TriggerOptions {
  */
 export function on(event: string, listener: (...args: any[]) => void, opts?: OnOptions): void {
     const bus = getEventBus();
-    if (opts?.unique && bus.listenerCount(event) > 0) return;
+    if (opts?.unique && bus.listenerCount(event) > 0) {
+        eventLog(`event ${event} already has listener, skip register`);
+        return;
+    }
 
     if (opts?.once) {
         const wrapper = (...args: any[]) => {
@@ -133,15 +137,18 @@ export function on(event: string, listener: (...args: any[]) => void, opts?: OnO
             listener(...args);
         };
         bus.on(event, wrapper);
+        eventLog(`event ${event} registered as once`);
     } else {
         bus.on(event, listener);
+        eventLog(`event ${event} registered`);
     }
 }
 
 /**
  * 移除事件监听器。
  *
- * @param listener - 必须与注册时的引用完全一致
+ * - 传入 `listener` → 移除指定监听器（必须与注册时引用一致）
+ * - 不传 `listener` → 移除该事件下的全部监听器
  *
  * @example
  * ```ts
@@ -149,11 +156,23 @@ export function on(event: string, listener: (...args: any[]) => void, opts?: OnO
  *
  * const handler = (uid: string) => console.log(uid);
  * on('user-login', handler);
+ *
+ * // 移除指定监听器
  * off('user-login', handler);
+ *
+ * // 移除该事件下所有监听器
+ * off('user-login');
  * ```
  */
-export function off(event: string, listener: (...args: any[]) => void): void {
-    getEventBus().off(event, listener);
+export function off(event: string, listener?: (...args: any[]) => void): void {
+    const bus = getEventBus();
+    if (listener) {
+        bus.off(event, listener);
+        eventLog(`event ${event} listener removed`);
+    } else {
+        bus.removeAllListeners(event);
+        eventLog(`event ${event} all listeners removed`);
+    }
 }
 
 /**
@@ -200,10 +219,14 @@ export function trigger(event: string, args?: any[], opts?: TriggerOptions): boo
             redis.publish(`${CHANNEL_PREFIX}${event}`, packPayload(a)).catch((err: any) => {
                 getLogger()?.warn?.(`event publish "${event}" failed: ${err?.message ?? err}`);
             });
+            eventLog(`event ${event} published to remote`);
+        } else {
+            eventLog(`event ${event} can't publish because redis is not configured`);
         }
     }
 
     if (local) {
+        eventLog(`event ${event} emitted to local`);
         return getEventBus().emit(event, ...a);
     }
     return false;
@@ -236,7 +259,7 @@ export async function initEventSubscriber(): Promise<void> {
 
     const redis = getRedis();
     if (!redis) {
-        getLogger()?.debug?.('event subscriber: Redis not configured, skip');
+        getLogger()?.error?.('event subscriber: Redis not configured, skip');
         return;
     }
 
@@ -247,6 +270,7 @@ export async function initEventSubscriber(): Promise<void> {
             : redis;
 
         sub.on('pmessage', (_pattern: string, channel: string, message: string) => {
+            eventLog(`event ${channel} received`);
             try {
                 const payload = JSON.parse(message) as RedisEventPayload;
                 // 跳过自己发出去的消息（本进程已通过本地 emit 处理）
@@ -255,15 +279,24 @@ export async function initEventSubscriber(): Promise<void> {
                 // 从频道名提取原始事件名：`[event]user-login` → `user-login`
                 const event = channel.slice(CHANNEL_PREFIX.length);
                 getEventBus().emit(event, ...(payload.a ?? []));
+                eventLog(`event ${event} emitted to local by redis remote`);
             } catch {
                 // 反序列化失败，静默丢弃
+                getLogger()?.warn?.(`event ${channel} deserialize failed, skip`);
             }
         });
 
         await sub.psubscribe(SUBSCRIBE_PATTERN);
-        getLogger()?.debug?.('event subscriber: Redis bridge ready');
+        getLogger()?.info?.('event subscriber: Redis bridge ready');
     } catch (err: any) {
-        getLogger()?.warn?.(`event subscriber init failed: ${err?.message ?? err}`);
+        getLogger()?.error?.(`event subscriber init failed: ${err?.message ?? err}`);
         _subscriberReady = false; // 允许重试
     }
+}
+
+/** @internal 输出缓存分类日志（仅当 setLogLevels 包含 'cache' 时生效） */
+function eventLog(message: string, ...params: any[]) {
+    const logger = globalThis[_LoggerService]! as LoggerService;
+    // pino-pretty 的 messageFormat 会根据 level=24 自动添加 [CACHE] 前缀
+    (logger as any).debugCategory?.('event', message, ...params);
 }

@@ -188,7 +188,14 @@ class Build {
                 if (/\S/.test(renderOrder)) {
                     orderBy.push(renderOrder);
                 }
-                return orderBy.length > 0 ? ` ORDER BY ${orderBy.join(',')} ` : '';
+                let data = orderBy.length > 0 ? ` ORDER BY ${orderBy.join(',')} ` : '';
+                data = data.trim();
+                if (data) {
+                    data = data.replace(/(^and\s)|(^or\s)|(,$)|(;$)/i, '');
+                    return data;
+                } else {
+                    return '';
+                }
             }
         };
     }

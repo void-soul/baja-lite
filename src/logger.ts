@@ -8,7 +8,7 @@
  * - log: ['debug']     看所有 debug（包括 sql/cache）
  * - log: ['info']      标准行为，只看 info+
  */
-export const LOG_LEVELS = ["verbose", "sql", "cache", "debug", "info", "log", "warn", "error", "fatal"] as const;
+export const LOG_LEVELS = ["verbose", "sql", "cache", "debug", "info", "log", "warn", "error", "fatal", "event"] as const;
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
 export interface LoggerService {
