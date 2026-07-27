@@ -16,8 +16,8 @@ export interface LoggerService {
     info(message: any, ...optionalParams: any[]): any;
     error(message: any, ...optionalParams: any[]): any;
     warn(message: any, ...optionalParams: any[]): any;
-    /** 分类调试日志：debugCategory('sql', 'SELECT ...') / debugCategory('cache', 'hit key') */
-    debugCategory?(category: 'sql' | 'cache', message: any, ...optionalParams: any[]): any;
+    /** 分类调试日志：debugCategory('sql', 'SELECT ...') / debugCategory('cache', 'hit key') / debugCategory('event', '...') */
+    debugCategory?(category: 'sql' | 'cache' | 'event', message: any, ...optionalParams: any[]): any;
     debug?(message: any, ...optionalParams: any[]): any;
     verbose?(message: any, ...optionalParams: any[]): any;
     fatal?(message: any, ...optionalParams: any[]): any;
@@ -116,7 +116,7 @@ export class PrinterLogger implements LoggerService {
      *   this.debugCategory('sql', 'SELECT * FROM user WHERE id = ?', params);
      *   this.debugCategory('cache', 'memcache hit (device001)');
      */
-    debugCategory(category: 'sql' | 'cache', message: any, ...optionalParams: any[]) {
+    debugCategory(category: 'sql' | 'cache' | 'event', message: any, ...optionalParams: any[]) {
         if (!this.activeLevels.includes(category) && !this.activeLevels.includes('debug')) return;
         const ts = new Date().toISOString().replace('T', ' ').slice(0, 23);  // 2026-07-02 17:27:27.013
         const params = optionalParams.length

@@ -17,7 +17,8 @@
     },
     "./boot.js": "./boot.js",
     "./boot-remote.js": "./boot-remote.js",
-    "./wx.js": "./wx.js"
+    "./wx.js": "./wx.js",
+    "./event.js": "./event.js"
   },
   "types": "./index.d.ts",
   "bin": {
@@ -28,7 +29,10 @@
     "mysql": "bun --inspect ./src/test-mysql.ts",
     "postgres": "bun --inspect ./src/test-postgresql.ts",
     "sqlite": "bun --inspect ./src/test-sqlite.ts",
-    "test": "bun --inspect ./src/test.ts",
+    "test": "tsc -p tsconfig.test.json --module esnext && bun test src/__tests__/",
+    "test:build": "tsc -p tsconfig.test.json --module esnext",
+    "test:unit": "bun ./src/test-unit.ts",
+    "test:watch": "bun test --watch src/__tests__/",
     "xml": "bun --inspect ./src/test-xml.ts"
   },
   "dependencies": {

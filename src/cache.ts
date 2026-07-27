@@ -300,7 +300,10 @@ async function setMethodCache(
     // 删除旧格式残留（兼容升级）
     // await db.del(`[cache-meta]${config.key}`);   // 清理旧格式残留
     if (devid) {
-        // 订阅：清空 clear list —— 同样去重，避免每次 miss 都重复注册。
+        // 外部触发钩子（非内部调用）：业务系统通过 trigger(`user-${devid}`, [key]) 主动清理本进程缓存。
+        // 注意：跨进程缓存失效主要依赖共享 Redis（clearCacheKey 直接操作 Redis 数据），
+        // 此事件仅用于「按 devid 主动广播清理」的补充手段；若无人触发，监听为闲置但无害。
+        // unique: true 确保热点路径中重复注册只保留一个实例。
         const event = `user-${devid}`;
         on(event, async (key: string) => {
             await clearCacheKey(key);

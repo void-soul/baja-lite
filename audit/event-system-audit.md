@@ -56,21 +56,26 @@ The event module is a clean façade over a process-local `EventEmitter` plus an 
 
 ## Fix Task List (ordered by priority)
 
-| # | Severity | Task | Location |
-|---|----------|------|----------|
-| T1 | HIGH | `off` cannot remove `once` listeners — keep `Map<originalListener, wrapper>`, resolve in `off` | event.ts:134-139, 167 |
-| T2 | HIGH | Add unit tests for `unique` / `once` / `off`+`once` / remote bridge / `__pid` filter / malformed message | test suite |
-| T3 | MEDIUM | Wrap `emit` in subscribe handler with try/catch + log (isolate bad listeners) | event.ts:281 |
-| T4 | MEDIUM | Validate `Array.isArray(payload.a)` before spread in subscribe handler | event.ts:281 |
-| T5 | MEDIUM | Validate `Array.isArray(args)` in `trigger` | event.ts:211-212 |
-| T6 | MEDIUM | Track subscriber connection at module scope; add `closeEventSubscriber()` for graceful shutdown | event.ts:268, 256 |
-| T7 | MEDIUM | Document `trigger` best-effort / not-durable contract in JSDoc | event.ts:211 |
-| T8 | MEDIUM | Add correlation id (`msgId`/`traceId`) into payload + publish/delivery logs | event.ts:67, 219, 281, 285 |
-| T9 | MEDIUM | `safeArgs` should log dropped arguments instead of silent null | event.ts:58-63 |
-| T10 | MEDIUM | Decouple `eventLog` from magic `level=24`/`[CACHE]`/pino config or document the hard dependency | event.ts:298-302 |
-| T11 | MEDIUM | Add ADR: cache invalidation via shared Redis vs EventBus best-effort notifications | docs |
-| T12 | LOW | Handle missing `p` field defensively in subscribe handler | event.ts:277 |
-| T13 | LOW | Assert `channel.startsWith(CHANNEL_PREFIX)` before slice | event.ts:280 |
-| T14 | LOW | Document `initEventSubscriber` idempotency / reinit-on-close behavior | event.ts:256 |
-| T15 | LOW | Document (or remove) dead cache-invalidation listeners in cache.ts | cache.ts:305-318 |
-| T16 | LOW | Document `unique` single-thread atomicity assumption | event.ts:129 |
+| # | Severity | Task | Location | Status |
+|---|----------|------|----------|--------|
+| T1 | HIGH | `off` cannot remove `once` listeners — keep `Map<originalListener, wrapper>`, resolve in `off` | event.ts | ✅ Done（统一 `_wrappers` WeakMap，`on`/`off` 均按原引用解析） |
+| T2 | HIGH | Add unit tests for `unique` / `once` / `off`+`once` / remote bridge / `__pid` filter / malformed message | test suite | ✅ Done（`src/test-event.ts`，14 项全绿，脚本 `bun test-event`） |
+| T3 | MEDIUM | Isolate bad listeners so one throw can't break the subscriber loop / other listeners | event.ts `on()` | ✅ Done（改为在 `on()` 内用 `safeWrap` 包裹**每个**监听器，运行期验证 `captureRejections` 不能隔离同步抛错，故包裹是唯一可靠手段） |
+| T4 | MEDIUM | Validate `Array.isArray(payload.a)` before spread | event.ts pmessage | ✅ Done |
+| T5 | MEDIUM | Validate `Array.isArray(args)` in `trigger` | event.ts `trigger` | ✅ Done（非数组抛 `TypeError`） |
+| T6 | MEDIUM | Track subscriber connection at module scope; add `closeEventSubscriber()` | event.ts + boot.ts | ✅ Done（`_subConn` 跟踪；新增 `closeEventSubscriber`；boot 注册 SIGTERM/SIGINT 停机钩子） |
+| T7 | MEDIUM | Document `trigger` best-effort / not-durable contract | event.ts `trigger` JSDoc | ✅ Done |
+| T8 | MEDIUM | Add correlation id into payload + publish/delivery logs | event.ts | ✅ Done（`payload.id = randomUUID()`，日志带 id） |
+| T9 | MEDIUM | `safeArgs` log dropped arguments instead of silent null | event.ts `safeArgs` | ✅ Done |
+| T10 | MEDIUM | Decouple `eventLog` from magic `level=24`/`[CACHE]`/pino config | event.ts + logger.ts | ✅ Done（删除错误注释；`LoggerService.debugCategory` 类别扩展含 `'event'`，移除以 `as any` 绕类型） |
+| T11 | MEDIUM | ADR: cache invalidation via shared Redis vs EventBus best-effort | docs | ✅ Done（`docs/adr-event-vs-shared-redis.md`） |
+| T12 | LOW | Handle missing `p` field defensively | event.ts pmessage | ✅ Done（`typeof payload.p !== 'number'` 告警并按 remote 处理） |
+| T13 | LOW | Assert `channel.startsWith(CHANNEL_PREFIX)` before slice | event.ts pmessage | ✅ Done |
+| T14 | LOW | Document `initEventSubscriber` idempotency / reinit-on-close | event.ts JSDoc | ✅ Done |
+| T15 | LOW | Document (or remove) dead cache-invalidation listeners | cache.ts | ✅ Done（加注释说明其为外部触发钩子） |
+| T16 | LOW | Document `unique` single-thread atomicity assumption | event.ts `OnOptions.unique` JSDoc | ✅ Done |
+
+### 验证
+- `bun test-event` → 14 passed, 0 failed
+- event.ts / test-event.ts / boot.ts / cache.ts / logger.ts lint 无新增错误
+- 新增 `package.json` 导出 `./event.js` 与脚本 `test-event`

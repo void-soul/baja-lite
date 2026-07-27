@@ -3,7 +3,19 @@ import events from 'events';
 import { _Context, _dao, _DataConvert, _defOption, _enum, _EventBus, _fs, _GlobalSqlOption, _LoggerService, _MysqlKeepAliveTime, _path, _primaryDB, _sqlCache, ColumnMode, GlobalSqlOption } from './const/index.js';
 import { Mysql, Postgresql, SqlCache, Sqlite, SqliteRemote } from './db/index.js';
 import { LoggerService, PrinterLogger } from './logger.js';
-import { initEventSubscriber } from './event.js';
+import { initEventSubscriber, closeEventSubscriber } from './event.js';
+
+/** 是否已注册事件桥接的停机钩子（防止重复 boot 时重复注册） */
+let _eventShutdownHooked = false;
+
+/** 注册进程停机钩子：SIGTERM / SIGINT 时优雅关闭 Redis 事件订阅连接 */
+function registerEventShutdown(): void {
+    if (_eventShutdownHooked) return;
+    _eventShutdownHooked = true;
+    const shutdown = () => { void closeEventSubscriber(); };
+    process.once('SIGTERM', shutdown);
+    process.once('SIGINT', shutdown);
+}
 export const Boot = async function (options: GlobalSqlOption) {
     globalThis[_GlobalSqlOption] = Object.assign({}, _defOption);
     if (options.skipEmptyString !== undefined) {
@@ -165,6 +177,9 @@ export const Boot = async function (options: GlobalSqlOption) {
 
         // 初始化 Redis 事件跨进程桥接（订阅 [event]* 频道）
         await initEventSubscriber();
+
+        // 优雅停机：取消订阅并断开 Redis 订阅连接（重复 boot 安全）
+        registerEventShutdown();
     }
     if (options.Postgresql) {
         const Pool = await import('pg-pool');
